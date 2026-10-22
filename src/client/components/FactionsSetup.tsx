@@ -1,4 +1,4 @@
-import { MenuItem, Select, SelectProps, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material';
+import { MenuItem, Select, SelectProps, Table, TableBody, TableCell, TableRow } from '@mui/material';
 import React, { useCallback } from 'react';
 
 import { MessageType } from 'common/message';
@@ -78,13 +78,20 @@ function FactionsSetup(props: FactionsSetupProps) {
     }));
 
     return (
-        <Table aria-label="Faction setup">
+        <Table
+            aria-label="Faction setup"
+            sx={{
+                '& .MuiOutlinedInput-root': { height: { md: 44 } },
+                '& .MuiSelect-select': { py: { md: '10.5px' } },
+                '& .MuiIconButton-root': { p: { md: 0.5 }, mr: { md: 3 }, minWidth: { md: 44 }, minHeight: { md: 44 } },
+            }}
+        >
             <TableBody>
                 {factions.map(({ name, color, playerIds }, i) => (
                     <TableRow key={i}>
                         <TableCell
                             sx={{
-                                padding: '16px 8px 0px 8px',
+                                padding: { xs: '16px 8px 0px 8px', md: '6px 8px 0px 8px' },
                                 width: '60px',
                                 textAlign: 'center',
                                 verticalAlign: 'top',
@@ -110,15 +117,17 @@ function FactionsSetup(props: FactionsSetupProps) {
                         </TableCell>
                         <TableCell
                             sx={{
-                                display: 'flex',
+                                display: { xs: 'flex', md: 'grid' },
                                 flexDirection: 'column',
+                                gridTemplateColumns: { md: 'minmax(0, 1.5fr) minmax(0, 0.7fr) minmax(0, 1.2fr)' },
+                                gap: { md: 1.5 },
                                 width: '100%',
-                                padding: '16px 8px 16px 0px',
+                                padding: { xs: '16px 8px 16px 0px', md: '6px 8px 6px 0px' },
                             }}
                         >
                             <FactionSelect
                                 disabled={disableFactionSelect || pendingCommands > 0}
-                                sx={{ marginBottom: 1 }}
+                                sx={{ marginBottom: { xs: 1, md: 0 }, minWidth: 0 }}
                                 order={i}
                                 factionNames={factionNames}
                                 value={name}
@@ -126,13 +135,14 @@ function FactionsSetup(props: FactionsSetupProps) {
                             />
                             <ColorSelect
                                 disabled={pendingCommands > 0}
-                                sx={{ marginBottom: 1 }}
+                                sx={{ marginBottom: { xs: 1, md: 0 }, minWidth: 0 }}
                                 order={i}
                                 value={color}
                                 onChange={color => onColorChange(i, color)}
                                 disableNone={disableColorNone}
                             />
                             <PlayerSelect
+                                sx={{ minWidth: 0 }}
                                 disabled={pendingCommands > 0}
                                 playerNames={players || []}
                                 value={playerIds}

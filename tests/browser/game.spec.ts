@@ -150,7 +150,7 @@ test('invalid input and request failures remain recoverable on a nondefault port
         await page.reload();
         await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeVisible();
         expect(sockets.some(url => new URL(url).searchParams.get('playerId') === 'Host & Unicode 测试')).toBe(true);
-        expect(sockets.every(url => new URL(url).port === '18743')).toBe(true);
+        expect(sockets.every(url => new URL(url).port === new URL(page.url()).port)).toBe(true);
 
         await page.getByRole('button', { name: 'Game Info', exact: true }).click();
         await page.getByRole('button', { name: 'Restart Game...', exact: true }).click();

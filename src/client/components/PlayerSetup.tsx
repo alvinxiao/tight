@@ -56,8 +56,11 @@ function PlayerSetup() {
 
     return (
         <>
-            <GameInfoToolbar game={game} />
-            <Toolbar>
+            <GameInfoToolbar
+                game={game}
+                sx={{ minHeight: { md: 48 }, '& > .MuiButton-root': { whiteSpace: 'nowrap', flexShrink: 0 } }}
+            />
+            <Toolbar sx={{ minHeight: { md: 48 } }}>
                 <Grid container flexDirection="row" alignItems="center" wrap="nowrap">
                     <Grid container justifyContent="flex-start" alignItems="center" spacing={1}>
                         {!factionsHavePlayers ? (
