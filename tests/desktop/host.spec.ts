@@ -1,5 +1,5 @@
 import { test, expect, _electron as electron, ElectronApplication } from '@playwright/test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -232,7 +232,9 @@ test('desktop resumes approved sharing and generates fresh invitations after a g
         const adapter = first.interfaces[0];
         test.skip(!adapter, 'No private IPv4 adapter in this execution environment');
         await page.evaluate(address => window.tightDesktop?.setHosting(address), adapter.address);
-        const created = await page.request.post(`${new URL(page.url()).origin}/api/game/create`, { data: { numPlayers: 1 } });
+        const created = await page.request.post(`${new URL(page.url()).origin}/api/game/create`, {
+            data: { numPlayers: 1 },
+        });
         const id: unknown = await created.json();
         if (typeof id !== 'string') throw new Error('Missing game code');
         await page.goto(`${new URL(page.url()).origin}/${id}`);
@@ -251,6 +253,7 @@ test('desktop resumes approved sharing and generates fresh invitations after a g
             if (typeof decoded !== 'object' || !decoded || !('data' in decoded) || typeof decoded.data !== 'string')
                 throw new Error('Rendered QR could not be decoded');
             const link = decoded.data;
+            await page.screenshot({ path: testInfo.outputPath(`invitation-${name.replaceAll(' ', '-')}.png`) });
             await page.getByRole('button', { name: 'Close', exact: true }).click();
             return link;
         };
@@ -278,15 +281,61 @@ test('desktop resumes approved sharing and generates fresh invitations after a g
         expect(currentInvitation).not.toContain(hostCookie?.value || 'missing-host');
         const token = new URLSearchParams(new URL(currentInvitation).hash.slice(1)).get('pair');
         const claim = await fetch(`${new URL(currentInvitation).origin}/api/session/claim`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token }),
         });
         expect(claim.status).toBe(200);
         expect((await claim.json()).playerId).toBe('After app restart');
         const reused = await fetch(`${new URL(currentInvitation).origin}/api/session/claim`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token }),
         });
         expect(reused.status).toBe(403);
+        const staleToken = new URLSearchParams(new URL(restartedInvitation).hash.slice(1)).get('pair');
+        const expired = await fetch(`${new URL(currentInvitation).origin}/api/session/claim`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: staleToken }),
+        });
+        expect(expired.status).toBe(403);
         await page.screenshot({ path: testInfo.outputPath('restored-sharing.png') });
+        await page.evaluate(() => window.tightDesktop?.setHosting(null));
+        await quit(app);
+        app = await launch(directory);
+        page = await app.firstWindow();
+        await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
+        expect(hostingSchema.parse(await page.evaluate(() => window.tightDesktop?.getHosting())).mode).toBe('local');
+    } finally {
+        if (app) await quit(app);
+        await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+});
+
+test('an unavailable remembered adapter stays local and explains how to recover sharing', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'tight unavailable sharing 测试-'));
+    let app: ElectronApplication | undefined;
+    try {
+        const profile = path.join(directory, 'desktop-profile');
+        await mkdir(profile, { recursive: true });
+        await writeFile(
+            path.join(profile, 'sharing.json'),
+            JSON.stringify({
+                version: 1,
+                adapter: { name: 'Removed Wi-Fi adapter', address: '192.168.123.123' },
+            }),
+        );
+        app = await launch(directory);
+        const page = await app.firstWindow();
+        await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
+        const hosting = hostingSchema.parse(await page.evaluate(() => window.tightDesktop?.getHosting()));
+        expect(hosting.mode).toBe('local');
+        expect(hosting.restoreError).toBe('unavailable');
+        await page.getByRole('button', { name: 'Wi-Fi sharing', exact: true }).click();
+        await expect(page.getByRole('alert')).toContainText('Your previously shared network is no longer available');
+        await expect(page.getByRole('combobox', { name: 'Wi-Fi or Ethernet network', exact: true })).toBeEnabled();
+        await expect(page.getByRole('img', { name: 'Wi-Fi lobby QR code', exact: true })).not.toBeVisible();
     } finally {
         if (app) await quit(app);
         await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

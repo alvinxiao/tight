@@ -128,5 +128,10 @@
     "number": 26,
     "url": "https://github.com/alvinxiao/tight/issues/26",
     "title": "[D08][P1] Validate the actual Windows-and-phone release experience"
+  },
+  "D09": {
+    "number": 42,
+    "url": "https://github.com/alvinxiao/tight/issues/42",
+    "title": "[D09][P1] Restore usable QR invitations after quitting and restarting"
   }
 }

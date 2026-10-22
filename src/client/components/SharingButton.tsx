@@ -61,6 +61,13 @@ export default function SharingButton() {
                                 choose another network or restart TIGHT.
                             </Alert>
                         )}
+                        {hosting?.restoreError && (
+                            <Alert severity="warning">
+                                {hosting.restoreError === 'unavailable'
+                                    ? 'Your previously shared network is no longer available. Choose a current network below to resume sharing.'
+                                    : 'Wi-Fi sharing could not resume. Choose a current network below and start sharing again.'}
+                            </Alert>
+                        )}
                         {hosting && (
                             <>
                                 <Typography>

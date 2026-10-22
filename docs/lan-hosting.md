@@ -17,3 +17,11 @@ Keep the PC awake and connect phones to the same trusted Wi-Fi. Enable sharing, 
 If a phone cannot connect, check that Windows permits TIGHT on Private networks and that the router does not isolate guests or wireless clients. Do not enable router port forwarding. Stopping sharing disconnects phones while keeping the desktop game open.
 
 If the selected adapter disappears or its address changes, refresh the network list and select the current adapter. An address change also changes the browser origin, so issue fresh invitations for phones using the new address. Automated tests exercise real interface binding and decode rendered QR images; they do not replace physical phone camera and Windows firewall qualification.
+
+## Reopening a shared game
+
+TIGHT remembers the private adapter explicitly selected in **Wi-Fi sharing**. Reopening the app restores sharing only when that adapter's name and private IPv4 address still match the current network list. The backend validates the address again before binding. **Stop Wi-Fi sharing** clears the remembered selection, so reopening stays local. A first launch also stays local.
+
+The preference contains only the adapter name and address in `sharing.json` under Electron's per-user profile. It contains no host credential, invitation token, game, or player identity. Approval and listener changes run in one native queue. At startup, TIGHT consumes the saved preference before binding. Active approval stays in memory and is written atomically only during graceful quit. A failed adapter change retains the previous in-memory approval. If the app crashes, enable sharing again when it reopens. A failure to consume the preference keeps sharing local; a failure to save on quit shows a warning and does not leave an earlier consumed selection to replay. The normal host frame, origin, and cookie checks still protect these controls.
+
+If the remembered network disappeared or the new listener cannot bind, TIGHT opens locally and explains how to choose a current network in **Wi-Fi sharing**. A resumed game can then create a fresh private QR invitation. Old invitation tokens are not stored or replayed after app restart. A new app session can use another port, so create a new invitation rather than reusing an old screenshot.
