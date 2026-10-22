@@ -220,3 +220,75 @@ test('desktop shares on a selected adapter, generates usable QR invitations, and
         await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
 });
+
+test('desktop resumes approved sharing and generates fresh invitations after a game or app restart', async ({}, testInfo) => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'tight resume sharing 测试-'));
+    let app: ElectronApplication | undefined;
+    try {
+        app = await launch(directory);
+        let page = await app.firstWindow();
+        await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
+        const first = hostingSchema.parse(await page.evaluate(() => window.tightDesktop?.getHosting()));
+        const adapter = first.interfaces[0];
+        test.skip(!adapter, 'No private IPv4 adapter in this execution environment');
+        await page.evaluate(address => window.tightDesktop?.setHosting(address), adapter.address);
+        const created = await page.request.post(`${new URL(page.url()).origin}/api/game/create`, { data: { numPlayers: 1 } });
+        const id: unknown = await created.json();
+        if (typeof id !== 'string') throw new Error('Missing game code');
+        await page.goto(`${new URL(page.url()).origin}/${id}`);
+        await page.getByRole('textbox', { name: 'Enter Name', exact: true }).fill('Restart host');
+        await page.getByRole('button', { name: 'Continue', exact: true }).click();
+        const invite = async (name: string) => {
+            await page.getByRole('button', { name: 'Pair a device', exact: true }).click();
+            await page.getByRole('textbox', { name: 'Player name', exact: true }).fill(name);
+            await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
+            const qr = page.getByRole('img', { name: 'Player invitation QR code', exact: true });
+            await expect(qr).toBeVisible();
+            const picture = PNG.sync.read(await qr.screenshot());
+            const reader: unknown = require('jsqr');
+            if (typeof reader !== 'function') throw new Error('Missing QR decoder');
+            const decoded: unknown = reader(new Uint8ClampedArray(picture.data), picture.width, picture.height);
+            if (typeof decoded !== 'object' || !decoded || !('data' in decoded) || typeof decoded.data !== 'string')
+                throw new Error('Rendered QR could not be decoded');
+            const link = decoded.data;
+            await page.getByRole('button', { name: 'Close', exact: true }).click();
+            return link;
+        };
+        const firstInvitation = await invite('Before restart');
+        const restart = await page.request.post(`${new URL(page.url()).origin}/api/game/restart`, { data: { id } });
+        expect(restart.ok()).toBe(true);
+        const restartedInvitation = await invite('After game restart');
+        expect(restartedInvitation).not.toBe(firstInvitation);
+        await quit(app);
+        app = await launch(directory);
+        page = await app.firstWindow();
+        await expect(page.getByRole('article', { name: `Saved game ${id}`, exact: true })).toBeVisible();
+        const restored = hostingSchema.parse(await page.evaluate(() => window.tightDesktop?.getHosting()));
+        expect(restored.mode).toBe('lan');
+        if (restored.mode !== 'lan') throw new Error('Sharing was not restored');
+        expect(restored.address).toBe(adapter.address);
+        await page.getByRole('link', { name: `Resume ${id}`, exact: true }).click();
+        await page.getByRole('textbox', { name: 'Enter Name', exact: true }).fill('Restart host');
+        await page.getByRole('button', { name: 'Continue', exact: true }).click();
+        const currentInvitation = await invite('After app restart');
+        expect(currentInvitation).not.toBe(restartedInvitation);
+        expect(new URL(currentInvitation).hostname).toBe(adapter.address);
+        expect(new URL(currentInvitation).port).toBe(String(restored.port));
+        const hostCookie = (await page.context().cookies()).find(cookie => cookie.name === 'tight-session');
+        expect(currentInvitation).not.toContain(hostCookie?.value || 'missing-host');
+        const token = new URLSearchParams(new URL(currentInvitation).hash.slice(1)).get('pair');
+        const claim = await fetch(`${new URL(currentInvitation).origin}/api/session/claim`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
+        });
+        expect(claim.status).toBe(200);
+        expect((await claim.json()).playerId).toBe('After app restart');
+        const reused = await fetch(`${new URL(currentInvitation).origin}/api/session/claim`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
+        });
+        expect(reused.status).toBe(403);
+        await page.screenshot({ path: testInfo.outputPath('restored-sharing.png') });
+    } finally {
+        if (app) await quit(app);
+        await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+});
