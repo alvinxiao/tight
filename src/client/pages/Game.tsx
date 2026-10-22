@@ -28,7 +28,6 @@ import {
     GameClientData,
     GameStatus,
     getFactionTurn,
-    isPlayerSpectator,
     Phase,
     StrategyCardIndex,
 } from 'common/Game';
@@ -137,7 +136,7 @@ function Game() {
     const theme = useTheme();
     const classes = useStyles();
     const { sendData } = useAppContext();
-    const { gameId, game, playerId } = useGameInfo();
+    const { gameId, game, playerId, isHost } = useGameInfo();
     const navigate = useNavigate();
 
     const [statusState, setStatusState] = useState<GameStatus>({
@@ -168,7 +167,7 @@ function Game() {
         }
     });
 
-    if (!playerId && game) {
+    if (!playerId && game && isHost) {
         const onClose = (canceled: boolean) => {
             if (canceled) {
                 navigate(`/`);
@@ -178,7 +177,7 @@ function Game() {
         return <PlayerNameDialog open onClose={onClose} />;
     }
 
-    if (!game || !playerId) {
+    if (!game || (!playerId && isHost)) {
         return null;
     }
 
@@ -187,7 +186,7 @@ function Game() {
         return <PlayerSetup />;
     }
 
-    const isSpectator = isPlayerSpectator(game, playerId);
+    const isSpectator = !isHost;
 
     const { round, phase } = statusState;
     const canBack = round > 1 || (round === 1 && phase > Phase.STRATEGY);

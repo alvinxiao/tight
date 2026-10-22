@@ -50,6 +50,10 @@ test('desktop owns a loopback backend, isolates the renderer, saves games, and s
         expect(renderers.length).toBeGreaterThan(0);
         if (process.platform === 'win32') expect(renderers.every(metric => metric.sandboxed)).toBe(true);
         expect(await page.evaluate(() => typeof Reflect.get(window, 'require'))).toBe('undefined');
+        expect(await page.evaluate(() => document.cookie)).not.toContain('tight-session');
+        const hostCookie = (await page.context().cookies()).find(cookie => cookie.name === 'tight-session');
+        expect(hostCookie?.httpOnly).toBe(true);
+        expect(hostCookie?.sameSite).toBe('Strict');
         const second = spawn(executable(), launchArguments(), {
             cwd: directory,
             env: { ...process.env, TIGHT_DATA_DIR: directory },

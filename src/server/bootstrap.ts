@@ -1,3 +1,5 @@
+import { AccessSessions } from './accessSessions.js';
+import { sessionRouter, authorizeHttp } from './rest-api/session.js';
 import express, { NextFunction, Request, Response } from 'express';
 import http, { type Server as HttpServer } from 'http';
 import https, { type Server as HttpsServer } from 'https';
@@ -17,12 +19,14 @@ export interface BackendOptions {
     port: number;
     host?: string;
     dataDirectory: string;
+    hostToken?: string;
 }
 
 export async function startBackend(options: BackendOptions) {
     if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535)
         throw new Error('Invalid server port');
     const hostnames = trustedHostnames(options.host);
+    const sessions = new AccessSessions(options.hostToken);
     initializeGameStorage(options.dataDirectory);
     setDirty(false);
     try {
@@ -45,10 +49,12 @@ export async function startBackend(options: BackendOptions) {
 
         const publicPath = express.static(distDir);
         app.use(publicPath);
+        app.use('/api', authorizeHttp(sessions));
         app.use('/api/game/import', express.json({ limit: '1mb' }));
         app.use(express.json({ limit: '64kb' }));
         app.use(express.urlencoded({ extended: false, limit: '64kb', parameterLimit: 100 }));
 
+        app.use('/api', sessionRouter(sessions));
         app.use('/api', initializeRouter());
         app.use('/api', (_req: Request, res: Response) => {
             res.status(404).json({ error: 'API operation not found' });
@@ -89,7 +95,7 @@ export async function startBackend(options: BackendOptions) {
             server = http.createServer(app);
         }
 
-        const sockets = initializeWebSocketServer(server, request => verifyRequest(request));
+        const sockets = initializeWebSocketServer(server, request => verifyRequest(request), sessions);
         let stopPromise: Promise<void> | undefined;
         const stop = () =>
             (stopPromise ??= (async () => {
@@ -119,7 +125,13 @@ export async function startBackend(options: BackendOptions) {
         const originHost =
             options.host && options.host !== '0.0.0.0' && options.host !== '::' ? options.host : '127.0.0.1';
         const authority = originHost.includes(':') ? `[${originHost}]` : originHost;
-        return { origin: `${protocol}://${authority}:${address.port}`, port: address.port, stop };
+        return {
+            origin: `${protocol}://${authority}:${address.port}`,
+            port: address.port,
+            stop,
+            hostToken: sessions.hostToken,
+            hostClaimToken: sessions.hostClaimToken,
+        };
     } catch (error) {
         closeGameStorage();
         throw error;

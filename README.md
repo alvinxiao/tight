@@ -88,3 +88,5 @@ See [the desktop guide](docs/windows-desktop.md) for the preview artifact, devel
 The backend rejects unexpected Host headers and foreign browser origins for HTTP and WebSocket requests. See [network boundaries](docs/network-boundaries.md) for supported addresses, development proxy behavior, and the remaining authentication work.
 
 Dependency audit policy, remaining development advisories, and packaged notices: [dependency security](docs/dependency-security.md).
+
+Device permissions and pairing: [access sessions](docs/access-sessions.md). Standalone browser hosts must open the one-use **Host access** URL printed at startup; visiting the address without a valid device cookie shows the pairing screen.

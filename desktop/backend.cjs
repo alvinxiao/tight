@@ -17,7 +17,7 @@ const { pathToFileURL } = require('node:url');
             }
         }
     });
-    process.parentPort.postMessage({ type: 'ready', protocolVersion: 1, origin: backend.origin });
+    process.parentPort.postMessage({ type: 'ready', protocolVersion: 2, origin: backend.origin, hostToken: backend.hostToken });
 })().catch(error => {
     console.error('Could not start backend', error);
     process.exit(1);

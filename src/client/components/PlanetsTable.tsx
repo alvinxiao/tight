@@ -111,7 +111,7 @@ export interface PlanetsTableProps {
 
 function PlanetsTable(props: PlanetsTableProps) {
     const classes = useStyle(props);
-    const { game } = useGameInfo();
+    const { game, isHost } = useGameInfo();
 
     const {
         planetMap,
@@ -347,6 +347,7 @@ function PlanetsTable(props: PlanetsTableProps) {
                                 <TableCell align="center">
                                     <Tooltip title="Edit">
                                         <IconButton
+                                            disabled={!isHost}
                                             onClick={e => {
                                                 e.stopPropagation();
                                                 e.preventDefault();

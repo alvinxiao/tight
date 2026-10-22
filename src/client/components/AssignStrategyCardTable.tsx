@@ -8,7 +8,6 @@ import {
     StrategyCardIndex,
     buildStrategyCardOwners,
     formatFactionName,
-    isPlayerSpectator,
     strategyCardHasOwner,
 } from 'common/Game';
 import { MessageType } from 'common/message';
@@ -35,7 +34,7 @@ function canSelectStrategyCard(strategyCard: StrategyCard, game: GameClientData,
 
 export default function AssignStrategyCardTable() {
     const { sendData } = useAppContext();
-    const { game, gameId, playerId, strategyCards } = useGameInfo();
+    const { game, gameId, playerId, strategyCards, canEditFaction } = useGameInfo();
 
     if (!game || strategyCards.length === 0) {
         return null;
@@ -64,7 +63,7 @@ export default function AssignStrategyCardTable() {
                                     value={faction.strategyCard}
                                     variant="outlined"
                                     onChange={e => onTakeCardClick(faction.name, Number(e.target.value))}
-                                    disabled={isPlayerSpectator(game, playerId)}
+                                    disabled={!canEditFaction(faction.name)}
                                 >
                                     <MenuItem key={0} value={0}>
                                         None

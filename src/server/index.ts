@@ -8,6 +8,7 @@ try {
         host: process.env.TIGHT_HOST,
         dataDirectory: defaultDataDirectory(),
     });
+    console.log(`Host access: ${backend.origin}/#host=${backend.hostClaimToken}`);
     const protocol = new URL(backend.origin).protocol;
     const bindHost = process.env.TIGHT_HOST;
     const localAddress = Object.values(networkInterfaces())

@@ -6,7 +6,7 @@ import { makeStyles } from '@mui/styles';
 
 import classNames from 'classnames';
 
-import { GameFaction, StrategyCardIndex, getFactionOrder, getNextFaction, isPlayerSpectator } from 'common/Game';
+import { GameFaction, StrategyCardIndex, getFactionOrder, getNextFaction } from 'common/Game';
 import { MessageType } from 'common/message';
 
 import { useAppContext } from '../Context';
@@ -54,7 +54,7 @@ const useStyles = makeStyles(theme => ({
 function ActionPhase() {
     const classes = useStyles();
     const { sendData } = useAppContext();
-    const { game, gameId, playerId } = useGameInfo();
+    const { game, gameId, playerId, isHost, canEditFaction } = useGameInfo();
     if (!game) {
         return null;
     }
@@ -93,7 +93,7 @@ function ActionPhase() {
         }
     };
 
-    const isSpectator = isPlayerSpectator(game, playerId);
+    const isSpectator = !isHost;
     const currentFactionIndex =
         turn === StrategyCardIndex.END ? factionOrder.length : factionOrder.findIndex(f => f.strategyCard === turn);
 
@@ -101,6 +101,7 @@ function ActionPhase() {
         <Grid container direction="column">
             {factionOrder.map((faction: GameFaction) => {
                 const { name: factionName } = faction;
+                const isSpectator = !canEditFaction(factionName);
                 const factionIndex = factionOrder.findIndex(f => f.name === factionName);
                 const factionDone = faction.passed || currentFactionIndex > factionIndex;
                 const isPoliticsAndFlipped =
@@ -146,7 +147,7 @@ function ActionPhase() {
                                             classes={{ root: classes.button }}
                                             color="primary"
                                             variant="contained"
-                                            disabled={isSpectator || faction.passed}
+                                            disabled={!isHost || faction.passed}
                                             onClick={() => onNextTurn(faction, !factionDone)}
                                         >
                                             {factionDone ? 'UNDONE' : 'DONE'}
@@ -156,7 +157,7 @@ function ActionPhase() {
                                         <SpeakerSelect
                                             className={classes.speakerSelect}
                                             fullWidth
-                                            disabled={isSpectator}
+                                            disabled={!isHost}
                                         />
                                     )}
                                     {isImperialAndFlipped && (

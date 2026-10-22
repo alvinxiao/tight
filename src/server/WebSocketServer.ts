@@ -2,6 +2,7 @@ import { IncomingMessage, type Server as HttpServer } from 'http';
 import { type Server as HttpsServer } from 'https';
 import { WebSocketServer as WSServer, WebSocket as WebSocketType } from 'ws';
 
+import { Session } from 'common/session.js';
 import { MessageType, PartialData } from 'common/message.js';
 import uuidv4 from 'common/uuidv4.js';
 
@@ -14,6 +15,7 @@ import parseClientMessage from './parseClientMessage.js';
 import { connectionQuerySchema } from './commandSchemas.js';
 import validateCommandState from './validateCommandState.js';
 import log from './log.js';
+import { AccessSessions, authorizeCommand, mayReadGame, visibleGame, visibleChange } from './accessSessions.js';
 import { VerifyNetworkRequest } from './networkPolicy.js';
 
 const KEEP_ALIVE_INTERVAL = 10000; // ms
@@ -23,9 +25,10 @@ interface OnConnectionParam {
     wss: WebSocketServer;
     ws: WebSocket;
     request: IncomingMessage;
+    sessions: AccessSessions;
 }
 
-function onConnection({ wss, ws, request }: OnConnectionParam) {
+function onConnection({ wss, ws, request, sessions }: OnConnectionParam) {
     ws.on('error', () => log('Web socket connection error'));
     let query: URLSearchParams;
     try {
@@ -41,7 +44,17 @@ function onConnection({ wss, ws, request }: OnConnectionParam) {
         return;
     }
     const { gameId, playerId } = parsed.data;
-    ws.gameId = gameId || null;
+    ws.accessToken = sessions.token(request);
+    const session = sessions.resolve(ws.accessToken);
+    if (gameId && !mayReadGame(session, gameId)) {
+        ws.close(1008, 'This device cannot access that game');
+        return;
+    }
+    ws.gameId = session.role === 'player' || session.role === 'spectator' ? session.gameId : gameId || null;
+    if (playerId && session.role !== 'host' && (session.role !== 'player' || playerId !== session.playerId)) {
+        ws.close(1008, 'Cannot select another player');
+        return;
+    }
 
     ws.isAlive = true;
     if (!ws.socketId) {
@@ -65,7 +78,17 @@ function onConnection({ wss, ws, request }: OnConnectionParam) {
         }
 
         const game = getGame(result.message.data.gameId);
-        const error = game ? validateCommandState(result.message, game) : 'Game not found';
+        let access;
+        try {
+            access = sessions.resolve(ws.accessToken || null);
+        } catch (error) {
+            console.error('Could not verify device access', error);
+            ws.close(1011, 'Could not verify device access');
+            return;
+        }
+        const error = game
+            ? authorizeCommand(access, result.message, game) || validateCommandState(result.message, game)
+            : 'Game not found';
         if (error) {
             ws.close(1008, error);
             return;
@@ -90,30 +113,52 @@ function onConnection({ wss, ws, request }: OnConnectionParam) {
     const data: PartialData = { playerId: null };
 
     if (ws.gameId) {
-        data.game = getGameForClient(ws.gameId);
+        const game = getGameForClient(ws.gameId);
+        data.game = game ? visibleGame(game, session) : null;
     }
 
-    if (playerId && data.game?.players.includes(playerId)) {
-        ws.playerId = playerId;
-        data.playerId = playerId;
+    const identity = session.role === 'player' ? session.playerId : session.role === 'host' ? playerId : null;
+    if (identity && data.game?.players.includes(identity)) {
+        ws.playerId = identity;
+        data.playerId = identity;
     }
 
     // Send initial packet
     sendData({ ws, type: MessageType.BROADCAST_INITIALIZE, data });
 }
 
-export default function initialize(server: HttpServer | HttpsServer, verifyRequest: VerifyNetworkRequest) {
+export default function initialize(
+    server: HttpServer | HttpsServer,
+    verifyRequest: VerifyNetworkRequest,
+    sessions: AccessSessions,
+) {
     const wss = new WSServer({
         server,
         maxPayload: 64 * 1024,
         verifyClient: (info, done) => {
             const rejection = verifyRequest(info.req);
             if (rejection) done(false, rejection.status, rejection.message);
-            else done(true);
+            else {
+                try {
+                    if (sessions.resolve(sessions.token(info.req)).role === 'unpaired')
+                        done(false, 401, 'Pair this device with the host first');
+                    else done(true);
+                } catch (error) {
+                    console.error('Could not verify device access', error);
+                    done(false, 503, 'Could not verify device access');
+                }
+            }
         },
     });
     wss.on('error', () => log('WebSocket server error'));
-    wss.on('connection', (ws: WebSocket, request: IncomingMessage) => onConnection({ wss, ws, request }));
+    wss.on('connection', (ws: WebSocket, request: IncomingMessage) => {
+        try {
+            onConnection({ wss, ws, request, sessions });
+        } catch (error) {
+            console.error('Could not initialize device connection', error);
+            ws.close(1011, 'Could not initialize connection');
+        }
+    });
 
     // Keep connections alive
     const heartbeat = setInterval(() => {
@@ -136,6 +181,25 @@ export default function initialize(server: HttpServer | HttpsServer, verifyReque
 
     // Broadcast changes on an interval
     const broadcasts = setInterval(() => {
+        const authorized = new Map<WebSocket, Session>();
+        wss.clients.forEach(socket => {
+            const ws = socket as WebSocket;
+            let access;
+            try {
+                access = sessions.resolve(ws.accessToken || null);
+            } catch (error) {
+                console.error('Could not verify device access', error);
+                ws.gameId = null;
+                ws.close(1011, 'Could not verify device access');
+                return;
+            }
+            if (access.role === 'unpaired' || (ws.gameId && !mayReadGame(access, ws.gameId))) {
+                ws.gameId = null;
+                ws.close(1008, 'Device access changed. Pair again with the host.');
+                return;
+            }
+            authorized.set(ws, access);
+        });
         if (!isDirty()) {
             // Nothing changed, don't broadcast.
             return;
@@ -145,7 +209,14 @@ export default function initialize(server: HttpServer | HttpsServer, verifyReque
         setDirty(false);
 
         if (dirtyGames) {
-            broadcastChangeData({ wss, dirtyGames });
+            broadcastChangeData({
+                wss,
+                dirtyGames,
+                serialize: (ws, change) => {
+                    const access = authorized.get(ws);
+                    return access ? visibleChange(change, access) : null;
+                },
+            });
         }
     }, BROADCAST_INTERVAL);
 

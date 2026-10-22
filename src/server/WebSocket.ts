@@ -1,6 +1,6 @@
 import { WebSocketServer as WSServer, WebSocket as WS } from 'ws';
 
-import { GameChangeDataMap } from 'common/Game.js';
+import { GameChangeDataMap, GameChangeData } from 'common/Game.js';
 import { ChangeData, MessageType } from 'common/message.js';
 
 import { logWS } from './log.js';
@@ -9,6 +9,7 @@ export interface WebSocketServer extends WSServer {}
 
 export interface WebSocket extends WS {
     isAlive: boolean;
+    accessToken?: string | null;
     socketId?: string;
     gameId?: string | null;
     playerId?: string | null;
@@ -37,18 +38,21 @@ export function sendData({ ws, type, data, error }: SendDataParams) {
 export interface BroadcastChangeDataParams {
     wss: WebSocketServer;
     dirtyGames: GameChangeDataMap;
+    serialize: (ws: WebSocket, change: GameChangeData) => GameChangeData | null;
     error?: any;
 }
 
 /**
  * Broadcast a message to all connected clients.
  */
-export function broadcastChangeData({ wss, dirtyGames, error }: BroadcastChangeDataParams) {
+export function broadcastChangeData({ wss, dirtyGames, error, serialize }: BroadcastChangeDataParams) {
     wss.clients.forEach((socket: WS) => {
         const ws = socket as WebSocket;
         const game = ws.gameId && dirtyGames[ws.gameId];
-        if (game) {
-            const data: ChangeData = { game };
+        if (game && ws.readyState === WS.OPEN) {
+            const serialized = serialize(ws, game);
+            if (!serialized) return;
+            const data: ChangeData = { game: serialized };
             const payload = { type: MessageType.BROADCAST_CHANGE, data, error };
             const id = getWebSocketLogId(ws);
             logWS(true, id, payload);

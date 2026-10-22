@@ -11,9 +11,10 @@ import WebSocket from 'ws';
 process.env.TIGHT_USE_HTTP = 'true';
 const { startBackend } = await import('../build/backend.js');
 
+let cookie = '';
 function http(port, headers = {}, method = 'GET', pathname = '/api/game/list') {
     return new Promise((resolve, reject) => {
-        const req = request({ hostname: '127.0.0.1', port, path: pathname, method, headers }, res => {
+        const req = request({ hostname: '127.0.0.1', port, path: pathname, method, headers: { Cookie: cookie, ...headers } }, res => {
             res.resume();
             res.on('end', () => resolve({ status: res.statusCode, headers: res.headers }));
         });
@@ -65,6 +66,7 @@ test('HTTP and WebSocket accept the bound host and reject foreign origins and re
         await rm(directory, { recursive: true, force: true });
     });
     const { port, origin } = backend;
+    cookie = `tight-session=${backend.hostToken}`;
     const valid = await http(port);
     assert.equal(valid.status, 200);
     assert.equal(valid.headers['x-content-type-options'], 'nosniff');
@@ -86,9 +88,9 @@ test('HTTP and WebSocket accept the bound host and reject foreign origins and re
     assert.equal(foreign.headers['access-control-allow-origin'], undefined);
     assert.equal(await rawStatus(port, [`Host: 127.0.0.1:${port}`, `Origin: ${origin}`, `Origin: ${origin}`]), 403);
     assert.ok([400, 421].includes(await rawStatus(port, [`Host: 127.0.0.1:${port}`, `Host: evil.invalid:${port}`])));
-    const socket = new WebSocket(origin.replace('http:', 'ws:'), { origin });
+    const socket = new WebSocket(origin.replace('http:', 'ws:'), { origin, headers: { cookie } });
     try {
-        await once(socket, 'message', { signal: AbortSignal.timeout(2000) });
+        await once(socket, 'message', { signal: AbortSignal.timeout(2000), headers: { cookie: `tight-session=${backend.hostToken}` } });
     } finally {
         socket.terminate();
     }
@@ -101,5 +103,5 @@ test('explicit localhost binding reports a usable origin and rejects invalid hos
     await assert.rejects(startBackend({ host: 'untrusted.invalid', port: 0, dataDirectory: directory }), /TIGHT_HOST/);
     backend = await startBackend({ host: 'localhost', port: 0, dataDirectory: directory });
     assert.equal(new URL(backend.origin).hostname, 'localhost');
-    assert.equal((await fetch(`${backend.origin}/api/game/list`, { signal: AbortSignal.timeout(2000) })).status, 200);
+    assert.equal((await fetch(`${backend.origin}/api/game/list`, { signal: AbortSignal.timeout(2000), headers: { cookie: `tight-session=${backend.hostToken}` } })).status, 200);
 });
