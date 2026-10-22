@@ -11,6 +11,7 @@ import { getGameForClient } from './database/game.js';
 import { WebSocket, WebSocketServer, broadcastChangeData, getWebSocketLogId, sendData } from './WebSocket.js';
 import { getDirtyGameData, isDirty, removeOldGames, setDirty } from './dirty.js';
 import handleMessage from './handleMessage.js';
+import parseClientMessage from './parseClientMessage.js';
 import log from './log.js';
 
 const KEEP_ALIVE_INTERVAL = 10000; // ms
@@ -39,7 +40,21 @@ function onConnection({ wss, ws, request }: OnConnectionParam) {
     log(`Opening web socket connection: ${idMsg}`);
 
     ws.on('pong', () => (ws.isAlive = true));
-    ws.on('message', (message: string) => handleMessage({ wss, ws, message }));
+    ws.on('error', () => log(`Web socket error: ${idMsg}`));
+    ws.on('message', (raw, isBinary) => {
+        if (isBinary) {
+            ws.close(1003, 'Text commands required');
+            return;
+        }
+
+        const result = parseClientMessage(raw.toString());
+        if (result.kind === 'invalid') {
+            ws.close(result.code, result.reason);
+            return;
+        }
+
+        handleMessage({ wss, ws, message: result.message });
+    });
     ws.on('close', () => log(`Closing web socket connection: ${idMsg}`));
 
     // Maybe use as API token?
@@ -65,7 +80,7 @@ export default function initialize(server: HttpServer | HttpsServer) {
         return wss;
     }
 
-    wss = new WSServer({ server });
+    wss = new WSServer({ server, maxPayload: 64 * 1024 });
     wss.on('connection', (ws: WebSocket, request: IncomingMessage) => onConnection({ wss, ws, request }));
 
     // Keep connections alive

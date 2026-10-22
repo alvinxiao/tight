@@ -116,9 +116,9 @@ if (dev) {
             hot: true,
             proxy: [
                 {
-                    context: '/api',
-                    target: `${localhost}:3001`,
-                    router: () => localhost,
+                    context: ['/api', '/socket'],
+                    target: localhost,
+                    ws: true,
                     secure: false,
                     changeOrigin: isHttps ? true : undefined,
                 },

@@ -88,8 +88,10 @@ export default function useWebSocket(options: WebSocketOptions) {
                 // Create new connection to the server
                 const gameId = state.game?.id || sessionStorage.getItem('gameId');
                 const playerId = state.playerId || sessionStorage.getItem('playerId');
-                const queryParams = `${gameId ? `?gameId=${gameId}` : ''}${playerId ? `&playerId=${playerId}` : ''}`;
-                ws = new WebSocket(`${url}${queryParams}`);
+                const endpoint = new URL(url);
+                if (gameId) endpoint.searchParams.set('gameId', gameId);
+                if (playerId) endpoint.searchParams.set('playerId', playerId);
+                ws = new WebSocket(endpoint.href);
                 ws.onopen = onOpen;
                 ws.onmessage = onMessage;
                 ws.onclose = onClose;

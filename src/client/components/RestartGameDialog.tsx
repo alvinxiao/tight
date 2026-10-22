@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import CloseIcon from '@mui/icons-material/Close';
 import {
     AppBar,
+    Alert,
     Box,
     Button,
     CircularProgress,
@@ -44,6 +45,7 @@ export default function RestartGameDialog(props: RestartGameDialogProps) {
     const { open, onClose } = props;
 
     const [restartingGame, setRestartingGame] = useState(false);
+    const [restartError, setRestartError] = useState(false);
 
     const { game } = useGameInfo();
 
@@ -65,16 +67,21 @@ export default function RestartGameDialog(props: RestartGameDialogProps) {
         onClose?.();
     };
 
-    const onRestart = () => {
+    const onRestart = async () => {
         setRestartingGame(true);
-        api.gameRestart({ id: game.id, ...gameOptions }).then(gameCode => {
+        setRestartError(false);
+        try {
+            const gameCode = await api.gameRestart({ id: game.id, ...gameOptions });
             if (gameCode) {
                 navigate(`/${gameCode}`);
             }
 
-            setRestartingGame(false);
             onClose?.();
-        });
+        } catch {
+            setRestartError(true);
+        } finally {
+            setRestartingGame(false);
+        }
     };
 
     return (
@@ -94,6 +101,7 @@ export default function RestartGameDialog(props: RestartGameDialogProps) {
                 </Toolbar>
             </AppBar>
             <DialogContent dividers>
+                {restartError && <Alert severity="error">Could not restart the game. Check your connection and try again.</Alert>}
                 <Box display="flex" flexDirection="column">
                     <Typography>
                         Restarting the game will reset all progress. Update any game settings below and click "Restart

@@ -38,6 +38,17 @@ export function isDirty(): boolean {
     return !isEmpty(dirty.games);
 }
 
+export function deleteGameAndNotify(gameId: string): boolean {
+    if (!getGame(gameId)) {
+        return false;
+    }
+
+    // Queue the final event while the game still exists, then remove it immediately.
+    markGameDirty(gameId, { deleted: true });
+    _gameTimestampMap.delete(gameId);
+    return deleteGame(gameId);
+}
+
 // Helper to mark parts of a Game object to be broadcasted out.
 export function markGameDirty(
     gameId: string,
@@ -101,7 +112,6 @@ export function getDirtyGameData(): GameChangeDataMap | null {
         const { created, deleted, status, planets, players, factions, publicObjectives } = dirtyParts;
         if (deleted) {
             log(`Removing old game: ${gameId}`);
-            deleteGame(gameId);
             gameData.deleted = true;
             gameDataMap[gameId] = gameData;
             return;
@@ -182,8 +192,7 @@ export function removeOldGames() {
     const now = Date.now();
     _gameTimestampMap.forEach((timestamp, gameId) => {
         if (now - timestamp > REMOVE_GAME_TIME_THRESHOLD) {
-            _gameTimestampMap.delete(gameId);
-            markGameDirty(gameId, { deleted: true });
+            deleteGameAndNotify(gameId);
         }
     });
 }

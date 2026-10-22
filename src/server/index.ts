@@ -15,7 +15,7 @@ import initializeRouter from './rest-api/router.js';
 const dirname = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const app = express();
-let port = Number(process.env.PORT) || 80;
+let port = process.env.PORT === undefined ? 80 : Number(process.env.PORT);
 const distDir = path.join(dirname, '../dist');
 const html = path.join(distDir, 'index.html');
 
@@ -26,6 +26,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 app.use('/api', initializeRouter());
+app.use('/api', (_req: Request, res: Response) => {
+    res.status(404).json({ error: 'API operation not found' });
+});
 
 app.get('*', (req: Request, res: Response) => {
     res.sendFile(html);
@@ -46,7 +49,9 @@ if (key && cert) {
 initializeWebSocketServer(server);
 
 server.listen(port, () => {
-    const ipAddress = chalk.cyanBright(`${protocol}://${ip.address()}/`);
-    console.log(`Server listening on port: ${port}`);
+    const address = server.address();
+    const boundPort = address && typeof address !== 'string' ? address.port : port;
+    const ipAddress = chalk.cyanBright(`${protocol}://${ip.address()}:${boundPort}/`);
+    console.log(`Server listening on port: ${boundPort}`);
     console.log(`Server running on: ${ipAddress}`);
 });
