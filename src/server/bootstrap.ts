@@ -215,6 +215,10 @@ export async function startBackend(options: BackendOptions) {
             port: address.port,
             stop,
             getHosting,
+            getDiagnostics: () => ({
+                storage: stopping ? 'closed' as const : 'open' as const,
+                ...sockets.getConnections(),
+            }),
             setLanHost,
             hostToken: sessions.hostToken,
             hostClaimToken: sessions.hostClaimToken,

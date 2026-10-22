@@ -359,6 +359,17 @@ export default function initialize(
     return {
         attach,
         detach,
+        getConnections: () => {
+            const players = new Set<string>();
+            let connections = 0;
+            for (const client of wss.clients) {
+                if (client.readyState !== WebSocketType.OPEN) continue;
+                connections += 1;
+                const access = sessions.resolve((client as WebSocket).accessToken || null);
+                if (access.role === 'player') players.add(JSON.stringify([access.gameId, access.playerId]));
+            }
+            return { connections, connectedPlayers: players.size };
+        },
         stop: () =>
             (stopped ??= new Promise<void>(resolve => {
                 clearInterval(heartbeat);
