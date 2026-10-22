@@ -42,7 +42,7 @@ beforeEach(async () => {
 afterEach(async () => {
     for (const ws of sockets) ws.terminate();
     sockets.clear();
-    if (server && server.exitCode === null) { const stopped = once(server, 'exit'); server.kill('SIGTERM'); await stopped; }
+    if (server && server.exitCode === null && server.signalCode === null) { const stopped = once(server, 'exit'); server.kill('SIGTERM'); await stopped; }
     await rm(dataDir, { recursive: true, force: true });
 });
 
@@ -93,7 +93,7 @@ async function command(ws, type, data) {
 async function gameTest(t, options = {}) {
     const id = await request('/game/create', options);
     const { ws } = await connect(id);
-    t.after(async () => { ws.close(); if (server.exitCode === null) await request('/game/delete', { id }); });
+    t.after(() => ws.close());
     return { id, ws };
 }
 
