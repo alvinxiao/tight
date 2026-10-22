@@ -20,17 +20,33 @@ import { Planets } from './planet/index.js';
 import { GameCreateParams, GameRestartParams } from 'common/api.js';
 import { generateGameCode } from '../utils/game.js';
 
-import { GameStore, dataDirectory } from './GameStore.js';
+import { GameStore } from './GameStore.js';
 
-const store = new GameStore(dataDirectory());
-const _games: GameMap = store.load();
+let store: GameStore | null = null;
+let _games: GameMap = {};
+
+export function initializeGameStorage(directory: string): void {
+    if (store) throw new Error('Game storage is already initialized');
+    const next = new GameStore(directory);
+    try { _games = next.load(); store = next; }
+    catch (error) { next.close(); throw error; }
+}
+export function closeGameStorage(): void {
+    store?.close();
+    store = null;
+    _games = {};
+}
+function storage(): GameStore {
+    if (!store) throw new Error('Game storage is not initialized');
+    return store;
+}
 
 export function mutateGame(id: string, change: () => void): void {
     const previous = structuredClone(_games[id]);
     const before = JSON.stringify(previous);
     try {
         change();
-        if (JSON.stringify(_games[id]) !== before) _games[id] = store.save(_games[id]);
+        if (JSON.stringify(_games[id]) !== before) _games[id] = storage().save(_games[id]);
     } catch (error) {
         _games[id] = previous;
         throw error;
@@ -99,13 +115,13 @@ export function createGame({
 
     const game = initializeGame({ id, version, numPlayers, numRounds, numVictoryPoints, publicObjectives });
 
-    _games[game.id] = store.save(game);
+    _games[game.id] = storage().save(game);
 
     return game;
 }
 
 export function importGame(game: Game): void {
-    _games[game.id] = store.save(game);
+    _games[game.id] = storage().save(game);
 }
 
 export function restartGame(options: GameRestartParams): Game | null {
@@ -127,14 +143,14 @@ export function restartGame(options: GameRestartParams): Game | null {
         ...otherGameOptions,
     };
     const newGame = initializeGame(combinedOptions);
-    _games[id] = store.save(newGame);
+    _games[id] = storage().save(newGame);
 
     return newGame;
 }
 
 export function deleteGame(id: string): boolean {
     if (_games && _games[id]) {
-        store.delete(id);
+        storage().delete(id);
         delete _games[id];
         return true;
     }

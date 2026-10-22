@@ -8,6 +8,7 @@ process.on('exit', () => rmSync(dataDir, { recursive: true, force: true }));
 
 export default defineConfig({
     testDir: './tests/browser',
+    outputDir: 'test-results/browser',
     timeout: 60000,
     fullyParallel: false,
     workers: 1,

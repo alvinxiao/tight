@@ -6,6 +6,7 @@ import nodeExternals from 'webpack-node-externals';
 
 const dev = process.env.NODE_ENV === 'development';
 const web = process.env.TARGET === 'web';
+const desktop = process.env.TARGET === 'desktop';
 const target = web ? 'web' : 'node';
 const mode = dev ? 'development' : 'production';
 
@@ -77,9 +78,13 @@ if (web) {
 } else {
     config = {
         ...config,
-        entry: path.resolve(serverDir, 'index.ts'),
+        entry: desktop ? path.resolve(serverDir, 'bootstrap.ts') : {
+            [dev ? 'server-dev' : 'server']: path.resolve(serverDir, 'index.ts'),
+            backend: path.resolve(serverDir, 'bootstrap.ts'),
+        },
+        module: { ...config.module, parser: { javascript: { importMeta: false } } },
         output: {
-            filename: dev ? 'server-dev.js' : 'server.js',
+            filename: desktop ? 'desktop-backend.js' : '[name].js',
             library: {
                 type: 'module',
             },
@@ -91,7 +96,7 @@ if (web) {
         experiments: {
             outputModule: true,
         },
-        externals: [nodeExternals({ importType: 'module' })],
+        externals: desktop ? [] : [nodeExternals({ importType: 'module' })],
         watch: dev,
     };
 }
