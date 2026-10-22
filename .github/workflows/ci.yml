@@ -62,11 +62,20 @@ jobs:
         run: node scripts/run-ci-tests.mjs desktop
         env:
           TIGHT_DESKTOP_EXECUTABLE: ${{ runner.temp }}\TIGHT preview 测试\TIGHT.exe
+      - name: Build unsigned per-user Windows installer
+        if: runner.os == 'Windows'
+        run: node scripts/run-ci-tests.mjs installer
+      - name: Install, launch, uninstall, and reinstall preview
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/test-windows-installer.ps1
       - uses: actions/upload-artifact@v4
         if: runner.os == 'Windows'
         with:
           name: TIGHT-windows-x64-preview
-          path: release/TIGHT-win32-x64/
+          path: |
+            release/TIGHT-win32-x64/
+            release/installer/*-preview-setup.exe
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: failure()

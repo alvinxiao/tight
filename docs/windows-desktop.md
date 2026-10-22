@@ -15,7 +15,7 @@ The Windows CI job builds and tests the source app, packages a Windows x64 app, 
 
 Keep the executable, DLLs, and `resources` folder together. Closing the window offers Keep TIGHT open or Quit and save. Quitting stops the backend and closes player connections. Reopening restores committed games.
 
-This is an unsigned development preview. Signing, an installer, final license review, and supported Windows-version qualification remain release work in #23 and #26. There is no automatic updater. Do not distribute this artifact as a production release.
+The artifact also includes a per-user setup executable. See [Windows installer preview](windows-installer.md) for installation, removal, and retained saves. This is an unsigned development preview. Signing, final license review, and clean-machine Windows qualification remain release work in #23 and #26. There is no automatic updater. Do not distribute this artifact as a production release.
 
 ## Storage
 

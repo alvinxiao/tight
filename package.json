@@ -24,7 +24,9 @@
         "build:desktop": "npm run build && npm run build:desktop-backend",
         "desktop": "npm run build:desktop && electron .",
         "test:desktop": "npm run build:desktop && playwright test --config=playwright.desktop.config.ts",
-        "package:windows": "npm run build:desktop && node scripts/package-desktop.mjs win32"
+        "package:windows": "npm run build:desktop && node scripts/package-desktop.mjs win32",
+        "installer:windows:preview": "npm run package:windows && node scripts/build-windows-installer.mjs preview",
+        "installer:windows:release": "npm run build:desktop && node scripts/package-desktop.mjs win32 release && node scripts/build-windows-installer.mjs release"
     },
     "dependencies": {
         "@babel/runtime": "7.29.10",
@@ -75,6 +77,7 @@
         "babel-loader": "9.1.3",
         "cross-env": "7.0.3",
         "electron": "45.0.0",
+        "electron-builder": "26.15.3",
         "file-loader": "6.2.0",
         "html-webpack-plugin": "5.6.0",
         "jsqr": "1.4.0",
@@ -96,5 +99,10 @@
     },
     "main": "desktop/main.cjs",
     "productName": "TIGHT",
-    "description": "Twilight Imperium game helper and tracker"
+    "description": "Twilight Imperium game helper and tracker",
+    "overrides": {
+        "app-builder-lib": {
+            "@electron/get": "5.0.0"
+        }
+    }
 }

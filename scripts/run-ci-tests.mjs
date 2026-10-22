@@ -8,6 +8,7 @@ const command = new Map([
     ['browser', 'npx playwright test'],
     ['desktop', 'npx playwright test --config=playwright.desktop.config.ts'],
     ['package', 'node scripts/package-desktop.mjs win32'],
+    ['installer', 'node scripts/build-windows-installer.mjs preview'],
 ]).get(mode);
 if (!command) throw new Error('Unknown CI check');
 const env = { ...process.env };
