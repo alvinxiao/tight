@@ -119,7 +119,10 @@ test('HTTP and pairing limits reject bursts before parsing and ignore forwarded-
         assert.equal(response.status, 200);
     }
     assert.equal(response.status, 429);
-    assert.equal((await api('session', undefined, { 'X-Forwarded-For': '203.0.113.5' })).status, 429);
+    const spoofed = await Promise.all(Array.from({ length: 16 }, (_, index) =>
+        api('session', undefined, { 'X-Forwarded-For': `203.0.113.${index}` }),
+    ));
+    assert.ok(spoofed.some(reply => reply.status === 429), 'changing forwarded addresses must not grant each request a fresh allowance');
     assert.match((await response.json()).error, /Wait a moment/);
 });
 
