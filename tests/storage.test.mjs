@@ -16,7 +16,7 @@ const { MessageType: T } = await import(`data:text/javascript;base64,${Buffer.fr
 
 async function host(directory, fails = false, port = '0') {
     const child = spawn(process.execPath, ['build/server.js'], {
-        env: { ...process.env, TIGHT_DATA_DIR: directory, TIGHT_USE_HTTP: 'true', PORT: port },
+        env: { ...process.env, TIGHT_DATA_DIR: directory, TIGHT_USE_HTTP: 'true', TIGHT_HOST: '127.0.0.1', PORT: port },
         stdio: ['ignore', 'pipe', 'pipe'],
     });
     let logs = '';
