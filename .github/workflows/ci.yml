@@ -25,7 +25,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --legacy-peer-deps --no-audit --no-fund
-      - run: npm test
+      - run: node scripts/run-ci-tests.mjs
         env:
           TIGHT_USE_HTTP: 'true'
       - run: npm run build:client
