@@ -71,10 +71,10 @@ These checks validate input and references; they do not grant authorization or i
 
 ## Browser tests
 
-Run `npx playwright install chromium` once, then `npm run test:browser`. This builds the application, checks browser test types, and runs two real Chromium journeys. They cover a host starting a two-faction game, an independent phone-sized guest joining, Unicode names after reload, create/join/restart failures and retry, and invalid URL recovery. The tests start their own server on port 18743 and refuse to reuse an existing server.
+Run `npx playwright install chromium` once, then `npm run test:browser`. This builds the application, checks browser test types, and runs three real Chromium journeys. They cover a host starting a two-faction game, an independent phone-sized guest joining, Unicode names after reload, create/join/restart failures and retry, invalid URL recovery, and saved-game resume/export/import/deletion with retries. The tests start their own server on port 18743 and refuse to reuse an existing server.
 
 In this cloud environment, use the installed system browser without downloading another copy: `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:browser`. Linux CI installs Chromium and runs the same browser tests after building. Windows CI runs the server regressions, client build, and browser-test type check. Real-phone networking and native Windows packaging still require separate validation.
 
 ## Saved games
 
-Games survive backend restarts and no longer expire after four hours. See [storage and recovery](docs/game-storage.md) for data locations, backups, export/import, and failure behavior. Set `TIGHT_DATA_DIR=/workspace/.tight-data` when developing in this cloud workspace. The saved-game home screen and export/import buttons are still pending.
+Games survive backend restarts and no longer expire after four hours. See [storage and recovery](docs/game-storage.md) for data locations, backups, export/import, and failure behavior. Set `TIGHT_DATA_DIR=/workspace/.tight-data` when developing in this cloud workspace. The home screen lists saved games with resume, export, import, and confirmed deletion. Player identity across browser sessions and host permissions remain pending.

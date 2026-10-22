@@ -151,3 +151,89 @@ test('invalid input and request failures remain recoverable on a nondefault port
         if (id) await request.post('/api/game/delete', { data: { id } });
     }
 });
+
+test('saved games can resume, export, delete with confirmation, and import with recovery', async ({
+    page,
+    request,
+}) => {
+    const created = await request.post('/api/game/create', { data: { numPlayers: 2 } });
+    const id: unknown = await created.json();
+    if (typeof id !== 'string') throw new Error('Expected a created game code');
+    const card = page.getByRole('article', { name: `Saved game ${id}`, exact: true });
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    try {
+        await page.goto('/');
+        await expect(card).toContainText('Setting up');
+        await expect(card).toContainText('Round 1 of 10');
+        await page.route('**/api/game/validate?*', route =>
+            route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
+        );
+        await page.getByRole('link', { name: `Resume ${id}`, exact: true }).click();
+        await expect(page.getByRole('button', { name: 'Retry loading game', exact: true })).toBeVisible();
+        await page.unroute('**/api/game/validate?*');
+        await page.getByRole('button', { name: 'Retry loading game', exact: true }).click();
+        await expect(page.getByRole('textbox', { name: 'Enter Name', exact: true })).toBeVisible();
+        await page.goto('/');
+        const downloaded = page.waitForEvent('download');
+        await page.getByRole('button', { name: `Export ${id}`, exact: true }).click();
+        const download = await downloaded;
+        expect(download.suggestedFilename()).toBe(`tight-${id}.json`);
+        const filename = await download.path();
+        if (!filename) throw new Error('Missing game export');
+        const { readFile } = await import('node:fs/promises');
+        const buffer = await readFile(filename);
+        const upload = () =>
+            page
+                .getByLabel('Import game file')
+                .setInputFiles({ name: 'game.json', mimeType: 'application/json', buffer });
+        await upload();
+        await expect(page.getByRole('alert')).toContainText('already exists');
+        await expect(card).toBeVisible();
+        await page.getByRole('button', { name: `Delete ${id}`, exact: true }).click();
+        await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(card).toBeVisible();
+        await page.route('**/api/game/delete', route =>
+            route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
+        );
+        await page.getByRole('button', { name: `Delete ${id}`, exact: true }).click();
+        await page.getByRole('button', { name: 'Delete saved game', exact: true }).click();
+        await expect(page.getByRole('alert')).toContainText('could not save');
+        await expect(card).toBeVisible();
+        await page.unroute('**/api/game/delete');
+        await page.getByRole('button', { name: `Delete ${id}`, exact: true }).click();
+        await page.getByRole('button', { name: 'Delete saved game', exact: true }).click();
+        await expect(card).toHaveCount(0);
+        await upload();
+        await expect(page.getByRole('alert')).toContainText(`Imported game ${id}`);
+        await expect(card).toBeVisible();
+        await page
+            .getByLabel('Import game file')
+            .setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{}') });
+        await expect(page.getByRole('alert')).toContainText('not a supported TIGHT');
+        await page
+            .getByLabel('Import game file')
+            .setInputFiles({ name: 'large.json', mimeType: 'application/json', buffer: Buffer.alloc(1024 * 1024 + 1) });
+        await expect(page.getByRole('alert')).toContainText('too large');
+        await expect(card).toBeVisible();
+        await page.route('**/api/game/list', route =>
+            route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
+        );
+        await page.getByRole('button', { name: 'Refresh saved games', exact: true }).click();
+        await expect(page.getByRole('alert').filter({ hasText: 'Could not load saved games' })).toBeVisible();
+        await page.unroute('**/api/game/list');
+        await page.getByRole('button', { name: 'Retry', exact: true }).click();
+        await expect(card).toBeVisible();
+        await page.evaluate(() => {
+            sessionStorage.setItem('gameId', 'AAAA');
+            sessionStorage.setItem('playerId', '');
+        });
+        await page.reload();
+        await expect(card).toBeVisible();
+        await page.setViewportSize({ width: 390, height: 844 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        expect(errors).toEqual([]);
+    } finally {
+        await request.post('/api/game/delete', { data: { id } });
+    }
+});

@@ -35,7 +35,7 @@ Never copy or replace a live database by hand. If SQLite left a rollback journal
 
 `POST /api/game/import` accepts the exported JSON with `Content-Type: application/json`, up to 1 MiB. It validates the complete snapshot before writing. An existing game code returns 409 and is never overwritten. Invalid or unsupported exports return 400. Successful imports retain the code, player names, factions, planets, scores, and game status.
 
-The normal request limit remains 64 KiB. Export/import buttons and a saved-game home screen are still tracked in issue #18. These endpoints have the same unfinished authorization model as the rest of the API; permissions remain a release blocker in issue #4.
+The normal request limit remains 64 KiB. The home screen lists saved games, opens their existing URLs, downloads exports, and imports selected JSON files. Deletion requires confirmation. Duplicate imports preserve the existing game and show an error. Player identity across browser sessions remains tracked in issue #18. These endpoints have the same unfinished authorization model as the rest of the API; permissions remain a release blocker in issue #4.
 
 ## Verification
 

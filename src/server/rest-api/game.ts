@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SavedGameSummary } from 'common/savedGames.js';
 import { savedGameSchema } from '../savedGameSchema.js';
 import { Response, Router } from 'express';
 
@@ -15,7 +16,7 @@ import {
     GameValidateResult,
 } from 'common/api.js';
 
-import { createGame, getGame, restartGame, importGame } from '../database/game.js';
+import { createGame, getGame, restartGame, importGame, listGames } from '../database/game.js';
 
 import { deleteGameAndNotify, markGameDirty } from '../dirty.js';
 import { PostRequest, GetRequest } from './types.js';
@@ -28,6 +29,21 @@ const exportSchema = z
     .strict();
 
 export default function initializeGameOperations(router: Router) {
+    router.get('/game/list', (_req, res: Response<SavedGameSummary[]>) => {
+        const games = Object.values(listGames()).map(
+            game =>
+                ({
+                    id: game.id,
+                    date: game.date,
+                    round: game.status.round,
+                    numRounds: game.numRounds,
+                    players: Object.keys(game.players),
+                    state: game.status.ended ? 'finished' : game.status.started ? 'playing' : 'setup',
+                }) satisfies SavedGameSummary,
+        );
+        games.sort((a, b) => b.date - a.date || a.id.localeCompare(b.id));
+        res.json(games);
+    });
     router.get('/game/export', (req, res) => {
         const parsed = parseRequest(gameQuerySchema, req.query, res);
         if (!parsed.success) return;

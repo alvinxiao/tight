@@ -287,3 +287,16 @@ test('reconnect snapshots retain a registered Unicode player and leave unknown n
     assert.equal(unknown.playerId, null);
     unknown.ws.close();
 });
+
+test('saved-game list returns summaries and reflects deletion', async t => {
+    const { id } = await gameTest(t, { numPlayers: 2, numRounds: 3 });
+    const games = await request('/game/list');
+    const saved = games.find(game => game.id === id);
+    assert.deepEqual(Object.keys(saved).sort(), ['date', 'id', 'numRounds', 'players', 'round', 'state']);
+    assert.equal(saved.numRounds, 3);
+    assert.equal(saved.round, 1);
+    assert.equal(saved.state, 'setup');
+    assert.deepEqual(saved.players, []);
+    await request('/game/delete', { id });
+    assert.equal((await request('/game/list')).some(game => game.id === id), false);
+});
