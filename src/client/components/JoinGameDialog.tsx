@@ -23,6 +23,7 @@ import { useAppContext } from '../Context';
 import useGameInfo from '../hooks/useGameInfo';
 import { ActionType } from '../reducer';
 import api from '../utils/api';
+import { isGameCode } from 'common/gameCode';
 
 const styles: Record<string, SxProps<Theme>> = {
     appBar: {
@@ -54,7 +55,7 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
     const { dispatch } = useAppContext();
 
     const [gameId, setGameId] = useState('');
-    const [error, setError] = useState(false);
+    const [error, setError] = useState<'invalid' | 'network' | null>(null);
     const [canRejoin, setCanRejoin] = useState(true);
     const [joining, setJoining] = useState(false);
 
@@ -68,6 +69,11 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
         e.preventDefault();
         e.stopPropagation();
 
+        if (!isGameCode(id)) {
+            setError('invalid');
+            return;
+        }
+        setError(null);
         setJoining(true);
 
         api.gameValidate({ gameId: id })
@@ -80,10 +86,11 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                     }
 
                     if (id === gameId) {
-                        setError(true);
+                        setError('invalid');
                     }
                 }
             })
+            .catch(() => setError('network'))
             .finally(() => setJoining(false));
     };
 
@@ -109,8 +116,8 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                                 color="primary"
                                 variant="outlined"
                                 label="Game Code"
-                                helperText={error ? 'Invalid Game Code' : ''}
-                                error={error}
+                                helperText={error === 'invalid' ? 'Invalid Game Code' : error === 'network' ? 'Could not reach the host. Try again.' : ''}
+                                error={Boolean(error)}
                                 onChange={e => setGameId(e.target.value.toUpperCase())}
                                 value={gameId}
                             />

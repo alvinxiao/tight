@@ -21,6 +21,7 @@ import {
     Typography,
 } from '@mui/material';
 
+import { isPlayerName, MAX_PLAYER_NAME_LENGTH } from 'common/playerName';
 import { MessageType } from 'common/message';
 
 import useGameInfo from '../hooks/useGameInfo';
@@ -157,6 +158,9 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
                                     color="primary"
                                     variant="outlined"
                                     label="Enter Name"
+                                    inputProps={{ maxLength: MAX_PLAYER_NAME_LENGTH }}
+                                    error={Boolean(selectedPlayerId) && !isPlayerName(selectedPlayerId)}
+                                    helperText={selectedPlayerId && !isPlayerName(selectedPlayerId) ? 'Choose a different name, up to 80 characters.' : ''}
                                     onChange={e => setSelectedPlayerId(e.target.value)}
                                 />
                             </FormControl>
@@ -165,7 +169,7 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
                     <Grid item sx={styles.gridItem}>
                         <FormControl fullWidth variant="standard">
                             <Button
-                                disabled={!Boolean(selectedPlayerId) || joining}
+                                disabled={!isPlayerName(selectedPlayerId) || joining}
                                 sx={styles.joinButton}
                                 color="primary"
                                 variant="contained"

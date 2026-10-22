@@ -53,11 +53,14 @@ function waitMessage(ws, predicate) {
     });
 }
 
-async function connect(id) {
-    const ws = new WebSocket(origin.replace('http:', 'ws:') + '/socket' + (id ? `?gameId=${id}` : ''));
+async function connect(id, playerId) {
+    const endpoint = new URL('/socket', origin.replace('http:', 'ws:'));
+    if (id) endpoint.searchParams.set('gameId', id);
+    if (playerId) endpoint.searchParams.set('playerId', playerId);
+    const ws = new WebSocket(endpoint);
     sockets.add(ws); ws.on('error', () => {}); ws.once('close', () => sockets.delete(ws));
     const initial = await waitMessage(ws, msg => msg.type === T.BROADCAST_INITIALIZE);
-    return { ws, game: initial.data.game };
+    return { ws, game: initial.data.game, playerId: initial.data.playerId };
 }
 
 async function snapshot(id) { const { ws, game } = await connect(id); ws.close(); return game; }
@@ -126,7 +129,7 @@ test('HTTP deletion notifies both subscribers without affecting another game', a
 
 test('missing restart ends with a structured 404', async () => {
     const response = await fetch(origin + '/api/game/restart', {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'NOT-A-GAME' }),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'AAAA' }),
         signal: AbortSignal.timeout(1500),
     });
     assert.equal(response.status, 404);
@@ -168,4 +171,115 @@ test('binary and oversized messages are bounded without killing a healthy client
         const changed = await waitMessage(healthy.ws, msg => msg.data?.game?.created?.id === id);
         assert.equal(changed.data.game.created.id, id);
     } finally { healthy.ws.close(); await request('/game/delete', { id }); }
+});
+
+test('game creation rejects malformed, oversized, and unknown fields without accepting invalid state', async () => {
+    for (const body of [
+        null, [], 'not an object', { numPlayers: 0 }, { numPlayers: 9 }, { numPlayers: 1.5 },
+        { numPlayers: '2' }, { numRounds: 0 }, { numRounds: 21 }, { numVictoryPoints: -1 },
+        { version: 'unknown' }, { players: { injected: { id: 'injected' } } },
+        { publicObjectives: [{ id: 1, description: '', vp: 99 }] },
+        { publicObjectives: [{ id: 1, description: 'x'.repeat(1025), vp: 1 }] },
+        { publicObjectives: [{ id: 1, description: '', vp: 1 }, { id: 1, description: '', vp: 1 }] },
+        JSON.parse('{"__proto__":{"polluted":true}}'),
+    ]) {
+        const response = await fetch(origin + '/api/game/create', {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(2000),
+        });
+        assert.equal(response.status, 400, JSON.stringify(body).slice(0, 100));
+        assert.equal(typeof (await response.json()).error, 'string');
+        assert.equal(server.exitCode, null);
+    }
+});
+
+test('REST query and body validation reject arrays, duplicate keys, and unsafe identifiers', async () => {
+    for (const path of [
+        '/game/validate?gameId=constructor', '/game/validate?gameId=ABCD&gameId=EFGH',
+        '/game/list-players?gameId[]=ABCD', '/faction/get-faction',
+        '/faction/get-faction?name[]=The%20Arborec', '/faction/get-faction?name=constructor',
+        '/planet/search?select[]=name', '/planet/search?select=__proto__',
+    ]) {
+        const response = await fetch(origin + '/api' + path, { signal: AbortSignal.timeout(2000) });
+        assert.equal(response.status, 400, path);
+        assert.deepEqual(await response.json(), { error: 'Invalid request' });
+    }
+    for (const [body, expected] of [['{', 400], [JSON.stringify({ padding: 'x'.repeat(65537) }), 413]]) {
+        const response = await fetch(origin + '/api/game/create', {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body, signal: AbortSignal.timeout(2000),
+        });
+        assert.equal(response.status, expected);
+        assert.equal(typeof (await response.json()).error, 'string');
+    }
+    assert.ok((await request('/planet/list-names')).includes('Mecatol Rex'));
+});
+
+test('invalid commands cannot crash the host, overwrite state, or reference missing game entities', async t => {
+    const { id, ws } = await gameTest(t, { numPlayers: 2, publicObjectives: [{ id: 1, description: '', vp: 1 }] });
+    await command(ws, T.GAME_UPDATE_FACTION, { gameId: id, order: 0, name: 'The Arborec' });
+    await command(ws, T.GAME_UPDATE_FACTION, { gameId: id, order: 1, name: 'The Emirates of Hacan' });
+    const before = await snapshot(id);
+    const planet = { factionName: 'The Arborec', planetId: 'Mecatol Rex' };
+    for (const [type, fields] of [
+        [T.GAME_UPDATE_FACTION, { order: -1 }], [T.GAME_UPDATE_FACTION, { order: 2 }],
+        [T.GAME_UPDATE_FACTION, { order: 0, planets: [] }], [T.GAME_UPDATE_FACTION, { order: 0, name: 'Unknown' }],
+        [T.GAME_UPDATE_FACTION, { order: 0, color: 'url(javascript:evil)' }],
+        [T.GAME_UPDATE_FACTION, { order: 0, playerIds: ['Unregistered'] }],
+        [T.GAME_REORDER_FACTION, { index: 1, newIndex: 2 }],
+        [T.TAKE_PLANET, { ...planet, planetId: 'Unknown' }], [T.TAKE_PLANET, { factionName: 'The Arborec' }],
+        [T.TAKE_PLANET, { ...planet, factionName: 'The Naalu Collective' }],
+        [T.UPDATE_PLANET, { planetId: 'Mecatol Rex', modifiers: { owner: 'The Arborec' } }],
+        [T.UPDATE_PLANET, { planetId: 'Mecatol Rex', modifiers: { resources: 'many' } }],
+        [T.GAME_STATUS_SET, { turn: 999 }], [T.GAME_STATUS_SET, { turn: 1 }], [T.GAME_STATUS_SET, { phase: 2 }],
+        [T.GAME_STATUS_SET, { pickOrder: [] }], [T.GAME_STATUS_SET, { pickTurn: 7 }],
+        [T.GAME_STATUS_SET, { pickOrder: ['The Arborec', 'The Arborec'] }],
+        [T.GAME_SET_SPEAKER, { speaker: 'The Naalu Collective' }],
+        [T.GAME_SET_PUBLIC_OBJECTIVES, { publicObjectives: [{ id: -1, description: '', vp: 1 }] }],
+        [T.SET_PUBLIC_OBJECTIVES, { factionName: 'The Arborec', publicObjectives: [false, true] }],
+        [T.SET_SECRET_OBJECTIVE, { factionName: 'The Arborec', secretObjectives: [] }],
+        [T.PASS_TURN, { factionName: 'The Arborec', passed: 'true' }],
+        [T.START_GAME, {}], [T.GAME_ADD_PLAYER, { playerId: '__proto__' }],
+        [T.GAME_ADD_PLAYER, { playerId: 'constructor' }], [T.GAME_ADD_PLAYER, { playerId: 'x'.repeat(81) }],
+    ]) {
+        const offender = await connect(id);
+        const closed = once(offender.ws, 'close');
+        offender.ws.send(JSON.stringify({ type, data: { gameId: id, ...fields } }));
+        const [code] = await closed;
+        assert.equal(code, 1008, `Command ${T[type]} ${JSON.stringify(fields)}`);
+        assert.equal(server.exitCode, null);
+        assert.deepEqual(await snapshot(id), before);
+    }
+    await command(ws, T.GAME_NEXT_ROUND, { gameId: id });
+    assert.equal((await snapshot(id)).status.round, 2);
+});
+
+test('sparse scored-objective arrays normalize safely and nested valid updates still work', async t => {
+    const { id, ws } = await gameTest(t, { numPlayers: 1, publicObjectives: [{ id: 3, description: 'Sparse ID', vp: 2 }] });
+    await command(ws, T.GAME_UPDATE_FACTION, { gameId: id, order: 0, name: 'The Arborec' });
+    await command(ws, T.SET_PUBLIC_OBJECTIVES, { gameId: id, factionName: 'The Arborec', publicObjectives: [null, null, true] });
+    await command(ws, T.UPDATE_PLANET, { gameId: id, planetId: 'Mecatol Rex', modifiers: { influence: -1, trait: ['CULTURAL'], DMZ: true } });
+    const game = await snapshot(id);
+    assert.deepEqual(game.factions[0].publicObjectives, [false, false, true]);
+    assert.deepEqual(game.planets['Mecatol Rex'].modifiers, { influence: -1, trait: ['CULTURAL'], DMZ: true });
+});
+
+test('invalid handshake queries close without creating a player or crashing the host', async () => {
+    for (const query of ['gameId[]=ABCD', 'gameId=ABCD&gameId=EFGH', 'playerId=constructor', 'unknown=field']) {
+        const ws = new WebSocket(origin.replace('http:', 'ws:') + '/socket?' + query);
+        sockets.add(ws); ws.on('error', () => {}); ws.once('close', () => sockets.delete(ws));
+        const [code] = await once(ws, 'close');
+        assert.equal(code, 1008);
+        assert.equal(server.exitCode, null);
+    }
+});
+
+test('reconnect snapshots retain a registered Unicode player and leave unknown names unset', async t => {
+    const { id, ws } = await gameTest(t);
+    const name = 'Host & Unicode 测试';
+    await command(ws, T.GAME_ADD_PLAYER, { gameId: id, playerId: name });
+    const resumed = await connect(id, name);
+    assert.equal(resumed.playerId, name);
+    resumed.ws.close();
+    const unknown = await connect(id, 'Unknown player');
+    assert.equal(unknown.playerId, null);
+    unknown.ws.close();
 });

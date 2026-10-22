@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router';
 import CloseIcon from '@mui/icons-material/Close';
 import {
     AppBar,
+    Alert,
     Button,
     Dialog,
     DialogContent,
@@ -46,6 +47,7 @@ function NewGameDialog(props: NewGameDialogProps) {
 
     const [gameOptions, setGameOptions] = useState<GameOptions>(() => ({ ...DEFAULT_GAME_OPTIONS }));
     const [creatingGame, setCreatingGame] = useState(false);
+    const [createError, setCreateError] = useState(false);
 
     const navigate = useNavigate();
 
@@ -53,17 +55,22 @@ function NewGameDialog(props: NewGameDialogProps) {
         onClose();
     };
 
-    const onSave = () => {
+    const onSave = async () => {
         setCreatingGame(true);
-        api.gameCreate(gameOptions).then(gameCode => {
+        setCreateError(false);
+        try {
+            const gameCode = await api.gameCreate(gameOptions);
             if (gameCode) {
                 dispatch({ type: ActionType.setPlayerId, payload: null });
                 navigate(`/${gameCode}`);
             }
 
-            setCreatingGame(false);
             onClose();
-        });
+        } catch {
+            setCreateError(true);
+        } finally {
+            setCreatingGame(false);
+        }
     };
 
     const { publicObjectives } = gameOptions;
@@ -87,6 +94,7 @@ function NewGameDialog(props: NewGameDialogProps) {
                 </Button>
             </AppBar>
             <DialogContent dividers>
+                {createError && <Alert severity="error">Could not create the game. Check the game options and your connection, then try again.</Alert>}
                 <NewGameForm gameOptions={gameOptions} onChange={options => setGameOptions(options)} />
             </DialogContent>
         </Dialog>
