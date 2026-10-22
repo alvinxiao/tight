@@ -2,26 +2,51 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { rules } from './helpers/game-rules.mjs';
 
-const { Phase, StrategyCardIndex: Card, getFactionOrder, getFactionTurn, getNextFaction,
-    buildStrategyCardOwners, strategyCardHasOwner, calculateVictoryPoints } = rules;
+const {
+    Phase,
+    StrategyCardIndex: Card,
+    getFactionOrder,
+    getFactionTurn,
+    getNextFaction,
+    buildStrategyCardOwners,
+    strategyCardHasOwner,
+    calculateVictoryPoints,
+} = rules;
 const faction = (name, strategyCard = Card.NONE, fields = {}) => ({
-    name, strategyCard, hasNaaluZeroToken: false, passed: false, ...fields,
+    name,
+    strategyCard,
+    hasNaaluZeroToken: false,
+    passed: false,
+    ...fields,
 });
 const names = factions => factions.map(entry => entry.name);
 
 test('initiative order puts all chosen cards before unchosen cards without changing seat order', () => {
-    const factions = [faction('Imperial', Card.IMPERIAL), faction('Waiting A'),
-        faction('Leadership', Card.LEADERSHIP), faction('Waiting B'), faction('Trade', Card.TRADE)];
+    const factions = [
+        faction('Imperial', Card.IMPERIAL),
+        faction('Waiting A'),
+        faction('Leadership', Card.LEADERSHIP),
+        faction('Waiting B'),
+        faction('Trade', Card.TRADE),
+    ];
     const game = { factions };
     assert.deepEqual(names(getFactionOrder(game)), ['Leadership', 'Trade', 'Imperial', 'Waiting A', 'Waiting B']);
     assert.deepEqual(names(game.factions), ['Imperial', 'Waiting A', 'Leadership', 'Waiting B', 'Trade']);
-    assert.deepEqual(names(getFactionOrder({ factions: factions.toReversed() })),
-        ['Leadership', 'Trade', 'Imperial', 'Waiting B', 'Waiting A']);
+    assert.deepEqual(names(getFactionOrder({ factions: factions.toReversed() })), [
+        'Leadership',
+        'Trade',
+        'Imperial',
+        'Waiting B',
+        'Waiting A',
+    ]);
 });
 
 test('Naalu zero token overrides initiative only when requested and follows its current holder', () => {
-    const factions = [faction('The Naalu Collective', Card.IMPERIAL, { hasNaaluZeroToken: true }),
-        faction('Leadership', Card.LEADERSHIP), faction('Trade', Card.TRADE)];
+    const factions = [
+        faction('The Naalu Collective', Card.IMPERIAL, { hasNaaluZeroToken: true }),
+        faction('Leadership', Card.LEADERSHIP),
+        faction('Trade', Card.TRADE),
+    ];
     assert.deepEqual(names(getFactionOrder({ factions })), ['The Naalu Collective', 'Leadership', 'Trade']);
     assert.deepEqual(names(getFactionOrder({ factions }, false)), ['Leadership', 'Trade', 'The Naalu Collective']);
     factions[0].hasNaaluZeroToken = false;
@@ -29,7 +54,10 @@ test('Naalu zero token overrides initiative only when requested and follows its 
     assert.deepEqual(names(getFactionOrder({ factions })), ['Trade', 'Leadership', 'The Naalu Collective']);
 });
 
-for (const [base, alternate] of [[Card.DIPLOMACY, Card.DIPLOMACY_2], [Card.CONSTRUCTION, Card.CONSTRUCTION_2]]) {
+for (const [base, alternate] of [
+    [Card.DIPLOMACY, Card.DIPLOMACY_2],
+    [Card.CONSTRUCTION, Card.CONSTRUCTION_2],
+]) {
     test(`strategy card ${base} and alternate ${alternate} share ownership in both directions`, () => {
         for (const held of [base, alternate]) {
             const owners = buildStrategyCardOwners({ factions: [faction('Owner', held), faction('Waiting')] });
@@ -43,8 +71,10 @@ for (const [base, alternate] of [[Card.DIPLOMACY, Card.DIPLOMACY_2], [Card.CONST
 }
 
 test('strategy turns follow speaker pick order and action turns follow assigned initiative', () => {
-    const game = { factions: [faction('Seat A', Card.TRADE), faction('Speaker'), faction('Seat C')],
-        status: { phase: Phase.STRATEGY, turn: Card.TRADE, pickOrder: ['Speaker', 'Seat C', 'Seat A'] } };
+    const game = {
+        factions: [faction('Seat A', Card.TRADE), faction('Speaker'), faction('Seat C')],
+        status: { phase: Phase.STRATEGY, turn: Card.TRADE, pickOrder: ['Speaker', 'Seat C', 'Seat A'] },
+    };
     assert.equal(getFactionTurn(game), 'Speaker');
     game.factions[1].strategyCard = Card.DIPLOMACY_2;
     assert.equal(getFactionTurn(game), 'Seat C');
@@ -58,8 +88,13 @@ test('strategy turns follow speaker pick order and action turns follow assigned 
 });
 
 test('next faction skips passed players and ends the initiative pass after its last eligible faction', () => {
-    const game = { factions: [faction('Leadership', Card.LEADERSHIP),
-        faction('Diplomacy', Card.DIPLOMACY, { passed: true }), faction('Trade', Card.TRADE)] };
+    const game = {
+        factions: [
+            faction('Leadership', Card.LEADERSHIP),
+            faction('Diplomacy', Card.DIPLOMACY, { passed: true }),
+            faction('Trade', Card.TRADE),
+        ],
+    };
     assert.equal(getNextFaction(game, 'Leadership')?.name, 'Trade');
     assert.equal(getNextFaction(game, 'Trade'), null);
     game.factions[2].passed = true;
@@ -70,9 +105,22 @@ test('next faction skips passed players and ends the initiative pass after its l
 });
 
 test('objective toggles add and remove only their own score while manual points remain', () => {
-    const player = { name: 'Scorer', publicObjectives: [false, false, false], victoryPoints: 2,
-        secretObjectives: [{ cleared: false, objective: { vp: 1 } }, { cleared: true, objective: { vp: 2 } }] };
-    const game = { factions: [player], publicObjectives: [{ id: 3, vp: 2 }, { id: 1, vp: 1 }] };
+    const player = {
+        name: 'Scorer',
+        publicObjectives: [false, false, false],
+        victoryPoints: 2,
+        secretObjectives: [
+            { cleared: false, objective: { vp: 1 } },
+            { cleared: true, objective: { vp: 2 } },
+        ],
+    };
+    const game = {
+        factions: [player],
+        publicObjectives: [
+            { id: 3, vp: 2 },
+            { id: 1, vp: 1 },
+        ],
+    };
     assert.equal(calculateVictoryPoints(game, 'Scorer'), 4);
     player.publicObjectives[2] = true;
     assert.equal(calculateVictoryPoints(game, 'Scorer'), 6);
