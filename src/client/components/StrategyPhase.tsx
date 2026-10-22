@@ -8,7 +8,6 @@ import {
     buildStrategyCardOwners,
     getFactionTurn,
     getNaalu,
-    isPlayerSpectator,
 } from 'common/Game';
 import { MessageType } from 'common/message';
 
@@ -41,14 +40,14 @@ function getCardOwnwer(
 
 function StrategyPhase() {
     const { sendData } = useAppContext();
-    const { game, gameId, playerId, strategyCards } = useGameInfo();
+    const { game, gameId, playerId, strategyCards, isHost, canEditFaction } = useGameInfo();
     if (!game) {
         return null;
     }
 
     const factionName = getFactionTurn(game);
     const stratCardOwners = buildStrategyCardOwners(game);
-    const isSpectator = isPlayerSpectator(game, playerId);
+    const isSpectator = !isHost;
 
     const onTakeCardClick = (e: MouseEvent<HTMLButtonElement>, strategyCard: StrategyCardIndex) => {
         e.stopPropagation();
@@ -91,7 +90,8 @@ function StrategyPhase() {
                 let buttonLabel = cardOwner ? 'Return' : 'Take';
 
                 const ButtonProps: NonNullable<StrategyCardProps['ButtonProps']> = {
-                    disabled: isSpectator || (factionName === 'END' && !Boolean(cardOwner)),
+                    'aria-label': `${buttonLabel} ${name}`,
+                    disabled: !canEditFaction(cardOwner || factionName) || (factionName === 'END' && !Boolean(cardOwner)),
                     onClick: (e: MouseEvent<HTMLButtonElement>) => onTakeCardClick(e, initiative),
                 };
 

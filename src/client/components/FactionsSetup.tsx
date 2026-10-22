@@ -22,7 +22,7 @@ interface FactionsSetupProps {
 
 function FactionsSetup(props: FactionsSetupProps) {
     const { sendData } = useAppContext();
-    const { game, gameId } = useGameInfo();
+    const { game, gameId, isHost } = useGameInfo();
     const { factions, players } = game || {};
     const { disableFactionSelect, disableColorNone, disableReordering } = props;
 
@@ -34,6 +34,11 @@ function FactionsSetup(props: FactionsSetupProps) {
     if (!game || !factions || factionNames.length === 0) {
         return null;
     }
+
+    if (!isHost) return <Table aria-label="Faction assignments"><TableBody>
+        {factions.map(faction => <TableRow key={faction.name}><TableCell>{faction.name}</TableCell>
+            <TableCell>{faction.playerIds.join(', ') || 'No players assigned'}</TableCell></TableRow>)}
+    </TableBody></Table>;
 
     const onFactionChange = (i: number, factionName: string) => {
         sendData({ type: MessageType.GAME_UPDATE_FACTION, data: { gameId, order: i, name: factionName } });

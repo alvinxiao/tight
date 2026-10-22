@@ -17,6 +17,7 @@ import {
     useTheme,
 } from '@mui/material';
 
+import { useSession } from '../SessionGate';
 import { useAppContext } from '../Context';
 import { ActionType } from '../reducer';
 import { AppTheme } from '../types';
@@ -25,6 +26,7 @@ import Drawer from './Drawer';
 import TextWithTooltip from './TextWithTooltip';
 
 function Header() {
+    const session = useSession();
     const appTheme = useTheme();
     const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -97,6 +99,10 @@ function Header() {
                     </Tooltip>
                 </Toolbar>
             </AppBar>
+            {session.role === 'player' && <Typography variant="body2" sx={{ px: 2, py: 1 }}>
+                Playing as {session.playerId}. The host controls setup and game phases.
+            </Typography>}
+            {session.role === 'spectator' && <Typography variant="body2" sx={{ px: 2, py: 1 }}>Spectator, read only.</Typography>}
             <Drawer open={drawerOpen} onOpen={() => setDrawerOpen(true)} onClose={() => setDrawerOpen(false)} />
         </>
     );

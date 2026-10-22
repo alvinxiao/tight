@@ -24,10 +24,11 @@ interface VictoryPointsProps {
 function VictoryPoints(props: VictoryPointsProps) {
     const theme = useTheme();
     // const classes = useStyles(props);
-    const { factionName, allowShowSecret = false, disabled = false, AccordionProps, hideExtraVp } = props;
+    const { factionName, allowShowSecret = false, disabled: explicitlyDisabled = false, AccordionProps, hideExtraVp } = props;
     const { sendData } = useAppContext();
-    const { game, gameId, playerId } = useGameInfo();
+    const { game, gameId, playerId, canEditFaction, isHost } = useGameInfo();
 
+    const disabled = explicitlyDisabled || !canEditFaction(factionName);
     const faction = game?.factions.find(f => f.name === factionName);
     if (!game || !faction) {
         return null;
@@ -97,7 +98,7 @@ function VictoryPoints(props: VictoryPointsProps) {
                             color={color}
                             backgroundColor={backgroundColor}
                             checked={publicObjectives[po.id - 1] ?? false}
-                            editable
+                            editable={isHost}
                             disabled={disabled}
                             objective={po}
                             onChange={onPublicObjectiveCheck}

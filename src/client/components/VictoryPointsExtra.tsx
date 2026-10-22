@@ -26,9 +26,10 @@ interface VictoryPointsExtraProps {
 
 function VictoryPointsExtra(props: VictoryPointsExtraProps) {
     const classes = useStyles(props);
-    const { factionName, disabled = false } = props;
+    const { factionName, disabled: explicitlyDisabled = false } = props;
     const { sendData } = useAppContext();
-    const { game, gameId } = useGameInfo();
+    const { game, gameId, canEditFaction } = useGameInfo();
+    const disabled = explicitlyDisabled || !canEditFaction(factionName);
 
     const faction = game?.factions.find(f => f.name === factionName);
     if (!faction) {

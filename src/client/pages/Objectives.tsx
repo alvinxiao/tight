@@ -13,7 +13,7 @@ import useGameInfo from '../hooks/useGameInfo';
 import { useAppContext } from '../Context';
 
 function StrategyCards() {
-    const { game, gameId, playerId } = useGameInfo();
+    const { game, gameId, playerId, isHost } = useGameInfo();
     const { sendData } = useAppContext();
     const [factionName, setFactionName] = useState(() => {
         const faction = playerId && game ? game.factions.find(f => f.playerIds.includes(playerId)) : null;
@@ -66,7 +66,7 @@ function StrategyCards() {
             <GameInfoToolbar game={game} />
             <Grid item>
                 <PublicObjectives
-                    editable={isPlayer}
+                    editable={isHost}
                     publicObjectives={game.publicObjectives}
                     onChange={onPublicObjectivesChange}
                     showFactions

@@ -7,6 +7,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import WebSocket from 'ws';
 import ts from 'typescript';
+import { claimHost, withCookie } from './helpers/host-access.mjs';
+let cookie = '';
+const fetch = (url, options) => globalThis.fetch(url, withCookie(cookie, options));
 
 const root = new URL('../', import.meta.url);
 const source = await readFile(new URL('../src/common/message.ts', import.meta.url), 'utf8');
@@ -30,6 +33,7 @@ before(async () => {
             if (match) { origin = `http://127.0.0.1:${match[1]}`; clearTimeout(timer); resolve(); }
         });
     });
+    cookie = await claimHost(origin, logs);
 });
 
 after(async () => {
@@ -61,7 +65,7 @@ async function connect(id, playerId) {
     const endpoint = new URL('/socket', origin.replace('http:', 'ws:'));
     if (id) endpoint.searchParams.set('gameId', id);
     if (playerId) endpoint.searchParams.set('playerId', playerId);
-    const ws = new WebSocket(endpoint);
+    const ws = new WebSocket(endpoint, { headers: { cookie } });
     sockets.add(ws); ws.on('error', () => {}); ws.once('close', () => sockets.delete(ws));
     const initial = await waitMessage(ws, msg => msg.type === T.BROADCAST_INITIALIZE);
     return { ws, game: initial.data.game, playerId: initial.data.playerId };
@@ -268,7 +272,7 @@ test('sparse scored-objective arrays normalize safely and nested valid updates s
 
 test('invalid handshake queries close without creating a player or crashing the host', async () => {
     for (const query of ['gameId[]=ABCD', 'gameId=ABCD&gameId=EFGH', 'playerId=constructor', 'unknown=field']) {
-        const ws = new WebSocket(origin.replace('http:', 'ws:') + '/socket?' + query);
+        const ws = new WebSocket(origin.replace('http:', 'ws:') + '/socket?' + query, { headers: { cookie } });
         sockets.add(ws); ws.on('error', () => {}); ws.once('close', () => sockets.delete(ws));
         const [code] = await once(ws, 'close');
         assert.equal(code, 1008);

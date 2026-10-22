@@ -16,6 +16,7 @@ import {
     Stack,
     Typography,
 } from '@mui/material';
+import { useSession } from '../SessionGate';
 import { SavedGameSummary } from 'common/savedGames';
 import JoinGameDialog from '../components/JoinGameDialog';
 import NewGameDialog from '../components/NewGameDialog';
@@ -25,6 +26,7 @@ type SavedGames = { kind: 'loading' } | { kind: 'error' } | { kind: 'ready'; gam
 type Notice = { severity: 'success' | 'error'; message: string } | null;
 
 function Home() {
+    const session = useSession();
     const importInput = useRef<HTMLInputElement>(null);
     const [openCreateDialog, setOpenCreateDialog] = useState(false);
     const [openJoinDialog, setOpenJoinDialog] = useState(false);
@@ -44,6 +46,7 @@ function Home() {
         }
     }
     useEffect(() => {
+        if (session.role !== 'host') return;
         const controller = new AbortController();
         void refresh(controller.signal);
         return () => controller.abort();
@@ -66,6 +69,10 @@ function Home() {
         }
     }
 
+    if (session.role === 'player' || session.role === 'spectator') return <Container sx={{ py: 4 }}>
+        <Typography>You are paired with game {session.gameId} as {session.role === 'player' ? session.playerId : 'a spectator'}.</Typography>
+        <Button component={Link} to={`/${session.gameId}/status`}>Return to game</Button>
+    </Container>;
     return (
         <Container maxWidth="md" sx={{ py: 4 }}>
             <Typography variant="h4" component="h1" align="center" gutterBottom>

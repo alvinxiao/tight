@@ -40,3 +40,5 @@ Use Node 24.19.0 and `npm ci --legacy-peer-deps`. `npm run desktop` builds and s
 Linux is a test environment, not a supported release target. A local virtual display is required for its Electron tests. In this restricted cloud environment, Chromium's OS sandbox cannot initialize, so tests explicitly use `TIGHT_ELECTRON_TEST_NO_SANDBOX=true`; this flag affects test launch arguments only. The production launcher never disables sandboxing. Windows CI runs without this flag and checks renderer OS sandbox status. Linux source and packaged-app checks do not replace Windows or real-phone qualification.
 
 On this cloud proxy, Electron binary downloads need Node's proxy support: set `NODE_USE_ENV_PROXY=1` and `electron_config_cache=/workspace/.cache/electron` for the download or packaging command. Keep the configured CA trust and proxy settings. Normal Windows CI uses its standard network configuration.
+
+Device pairing uses host-issued one-use invitations. The desktop installs its host cookie through native IPC before opening the UI; it never includes that credential in an invitation link. Current links are local only. See [access sessions](access-sessions.md).

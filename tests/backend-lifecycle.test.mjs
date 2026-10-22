@@ -6,6 +6,7 @@ import { createServer } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { withCookie } from './helpers/host-access.mjs';
 
 process.env.TIGHT_USE_HTTP = 'true';
 const { startBackend } = await import('../build/backend.js');
@@ -14,6 +15,7 @@ test('backend can recover a failed bind and stop repeatedly without leaking its 
     const directory = await mkdtemp(path.join(tmpdir(), 'tight-lifecycle-'));
     const occupied = createServer();
     let backend;
+    const fetch = (url, options) => globalThis.fetch(url, withCookie(`tight-session=${backend.hostToken}`, options));
     let socket;
     t.after(async () => {
         socket?.terminate();
@@ -37,7 +39,7 @@ test('backend can recover a failed bind and stop repeatedly without leaking its 
     backend = await startBackend({ host: '127.0.0.1', port: 0, dataDirectory: directory });
     const imported = await fetch(`${backend.origin}/api/game/import`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(exported) });
     assert.equal(imported.status, 200);
-    socket = new WebSocket(`${backend.origin.replace('http:', 'ws:')}/socket?gameId=${id}`);
+    socket = new WebSocket(`${backend.origin.replace('http:', 'ws:')}/socket?gameId=${id}`, { headers: { cookie: `tight-session=${backend.hostToken}` } });
     await once(socket, 'message', { signal: AbortSignal.timeout(2000) });
     const changed = once(socket, 'message', { signal: AbortSignal.timeout(2000) });
     await fetch(`${backend.origin}/api/game/restart`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });

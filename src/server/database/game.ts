@@ -21,6 +21,7 @@ import { GameCreateParams, GameRestartParams } from 'common/api.js';
 import { generateGameCode } from '../utils/game.js';
 
 import { GameStore } from './GameStore.js';
+import { GuestSession } from 'common/session.js';
 
 let store: GameStore | null = null;
 let _games: GameMap = {};
@@ -39,6 +40,16 @@ export function closeGameStorage(): void {
 function storage(): GameStore {
     if (!store) throw new Error('Game storage is not initialized');
     return store;
+}
+
+export function revokeAccessSessions(gameId: string): void {
+    storage().revokeAccessSessions(gameId);
+}
+export function findAccessSession(hash: string): GuestSession | null {
+    return storage().findAccessSession(hash);
+}
+export function saveAccessSession(hash: string, session: GuestSession): void {
+    storage().saveAccessSession(hash, session);
 }
 
 export function mutateGame(id: string, change: () => void): void {

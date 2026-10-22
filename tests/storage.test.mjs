@@ -9,6 +9,7 @@ import { createServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import WebSocket from 'ws';
 import ts from 'typescript';
+import { claimHost, withCookie } from './helpers/host-access.mjs';
 
 const source = await readFile(new URL('../src/common/message.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
@@ -40,15 +41,16 @@ async function host(directory, fails = false, port = '0') {
         assert.equal(origin, null, 'second or incompatible host must fail before listening');
         return;
     }
+    const cookie = await claimHost(origin, logs);
     return {
         async request(route, body) {
-            return fetch(`${origin}/api/game/${route}`, {
+            return fetch(`${origin}/api/game/${route}`, withCookie(cookie, {
                 ...(body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
                 signal: AbortSignal.timeout(3000),
-            });
+            }));
         },
         async connect(id) {
-            const ws = new WebSocket(`${origin.replace('http:', 'ws:')}/socket?gameId=${id}`);
+            const ws = new WebSocket(`${origin.replace('http:', 'ws:')}/socket?gameId=${id}`, { headers: { cookie } });
             const initial = await message(ws);
             return { ws, initial };
         },

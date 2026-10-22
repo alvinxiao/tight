@@ -69,7 +69,7 @@ function syncPlanetsFunc({ sendData, refreshed, exhausted, gameId, factionName, 
 function Planets() {
     const classes = useStyle();
     const { sendData } = useAppContext();
-    const { game, gameId, playerId } = useGameInfo();
+    const { game, gameId, playerId, isHost } = useGameInfo();
     const load = useCallback((signal: AbortSignal) => api.planetList(undefined, { signal }), []);
     const { resource, retry } = useRemoteData(load);
     const pending = resource.kind === 'loading';

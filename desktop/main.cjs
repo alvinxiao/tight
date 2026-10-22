@@ -19,11 +19,12 @@ let activeOrigin;
 const expectedExits = new WeakSet();
 
 function isReady(message) {
-    if (!message || message.type !== 'ready' || message.protocolVersion !== 1 || typeof message.origin !== 'string')
+    if (!message || message.type !== 'ready' || message.protocolVersion !== 2 || typeof message.origin !== 'string')
         return false;
     try {
         const url = new URL(message.origin);
         return (
+            typeof message.hostToken === 'string' && /^[A-Za-z0-9_-]{43}$/.test(message.hostToken) &&
             url.protocol === 'http:' &&
             url.hostname === '127.0.0.1' &&
             Number(url.port) > 1024 &&
@@ -87,7 +88,7 @@ function startBackend() {
             }
             ready = true;
             clearTimeout(timeout);
-            resolve(message.origin);
+            resolve({ origin: message.origin, hostToken: message.hostToken });
         });
         current.once('exit', () => {
             clearTimeout(timeout);
@@ -171,7 +172,8 @@ function configureWindow(origin) {
 async function launch() {
     try {
         await stopBackend();
-        const origin = await startBackend();
+        const { origin, hostToken } = await startBackend();
+        await session.defaultSession.cookies.set({ url: origin, name: 'tight-session', value: hostToken, httpOnly: true, sameSite: 'strict', secure: false });
         await configureWindow(origin);
     } catch (error) {
         void recover(error instanceof Error ? error.message : 'Could not start TIGHT.');
