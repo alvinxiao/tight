@@ -405,6 +405,8 @@ test('ending the operating-system session stops hosting without a confirmation d
         app = await launch(directory);
         const page = await app.firstWindow();
         await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
+        const adapter = hostingSchema.parse(await page.evaluate(() => window.tightDesktop?.getHosting())).interfaces[0];
+        if (adapter) await page.evaluate(address => window.tightDesktop?.setHosting(address), adapter.address);
         const origin = new URL(page.url()).origin;
         const created = await page.request.post(`${origin}/api/game/create`, { data: { numPlayers: 1 } });
         expect(created.ok()).toBe(true);
@@ -423,6 +425,7 @@ test('ending the operating-system session stops hosting without a confirmation d
         app = await launch(directory);
         const resumed = await app.firstWindow();
         await expect(resumed.getByRole('article', { name: `Saved game ${id}`, exact: true })).toBeVisible();
+        if (adapter) expect(hostingSchema.parse(await resumed.evaluate(() => window.tightDesktop?.getHosting())).mode).toBe('lan');
     } finally {
         if (app) await quit(app);
         await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

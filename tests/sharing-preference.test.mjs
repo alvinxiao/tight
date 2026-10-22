@@ -67,7 +67,10 @@ test('a stop forgets active approval without a filesystem write and a temporary 
     await backend.request(null, true);
     assert.equal(await controller.restore(), null, 'a temporary suspend can restore the in-memory approval');
     assert.equal(backend.calls.at(-1).address, selected.address);
+    await backend.request(null, true);
     await controller.change(null);
+    assert.equal(await controller.restore(), null, 'resume must respect an explicit Stop after suspension');
+    assert.equal(backend.calls.at(-1).address, null);
     assert.equal(await controller.prepareQuit(), true);
     assert.deepEqual(readSharingPreference(file), { kind: 'none' });
     const reopened = host();
