@@ -1,17 +1,18 @@
 import { IncomingMessage, type Server as HttpServer } from 'http';
 import { type Server as HttpsServer } from 'https';
-import { parse } from 'url';
 import { WebSocketServer as WSServer, WebSocket as WebSocketType } from 'ws';
 
 import { MessageType, PartialData } from 'common/message.js';
 import uuidv4 from 'common/uuidv4.js';
 
-import { getGameForClient } from './database/game.js';
+import { getGame, getGameForClient } from './database/game.js';
 
 import { WebSocket, WebSocketServer, broadcastChangeData, getWebSocketLogId, sendData } from './WebSocket.js';
 import { getDirtyGameData, isDirty, removeOldGames, setDirty } from './dirty.js';
 import handleMessage from './handleMessage.js';
 import parseClientMessage from './parseClientMessage.js';
+import { connectionQuerySchema } from './commandSchemas.js';
+import validateCommandState from './validateCommandState.js';
 import log from './log.js';
 
 const KEEP_ALIVE_INTERVAL = 10000; // ms
@@ -27,9 +28,22 @@ interface OnConnectionParam {
 let wss: WebSocketServer;
 
 function onConnection({ wss, ws, request }: OnConnectionParam) {
-    const queryParams = request.url ? parse(request.url, true).query : null;
-    const { gameId, playerId } = queryParams || {};
-    ws.gameId = (gameId as string) || null;
+    ws.on('error', () => log('Web socket connection error'));
+    let query: URLSearchParams;
+    try {
+        query = new URL(request.url || '/', 'http://localhost').searchParams;
+    } catch {
+        ws.close(1008, 'Invalid connection URL');
+        return;
+    }
+    const parameters = [...query.entries()];
+    const parsed = connectionQuerySchema.safeParse(Object.fromEntries(parameters));
+    if (!parsed.success || new Set(parameters.map(([key]) => key)).size !== parameters.length) {
+        ws.close(1008, 'Invalid connection query');
+        return;
+    }
+    const { gameId, playerId } = parsed.data;
+    ws.gameId = gameId || null;
 
     ws.isAlive = true;
     if (!ws.socketId) {
@@ -40,7 +54,6 @@ function onConnection({ wss, ws, request }: OnConnectionParam) {
     log(`Opening web socket connection: ${idMsg}`);
 
     ws.on('pong', () => (ws.isAlive = true));
-    ws.on('error', () => log(`Web socket error: ${idMsg}`));
     ws.on('message', (raw, isBinary) => {
         if (isBinary) {
             ws.close(1003, 'Text commands required');
@@ -53,22 +66,27 @@ function onConnection({ wss, ws, request }: OnConnectionParam) {
             return;
         }
 
+        const game = getGame(result.message.data.gameId);
+        const error = game ? validateCommandState(result.message, game) : 'Game not found';
+        if (error) {
+            ws.close(1008, error);
+            return;
+        }
         handleMessage({ wss, ws, message: result.message });
     });
     ws.on('close', () => log(`Closing web socket connection: ${idMsg}`));
 
     // Maybe use as API token?
     // const data: PartialData = { socketId: ws.socketId };
-    const data: PartialData = {};
+    const data: PartialData = { playerId: null };
 
     if (ws.gameId) {
         data.game = getGameForClient(ws.gameId);
     }
 
-    const pid = playerId as string;
-    if (playerId && data.game?.players.includes(pid)) {
-        data.game?.players.includes(pid);
-        ws.playerId = pid;
+    if (playerId && data.game?.players.includes(playerId)) {
+        ws.playerId = playerId;
+        data.playerId = playerId;
     }
 
     // Send initial packet

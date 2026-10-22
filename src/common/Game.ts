@@ -292,7 +292,7 @@ export function calculateVictoryPoints(game: Game | GameClientData, factionName:
     const { publicObjectives: gamePOs } = game;
     const { publicObjectives, secretObjectives, victoryPoints } = faction;
 
-    const povp = publicObjectives.reduce((total, po, i) => total + (po === true ? gamePOs[i].vp : 0), 0);
+    const povp = gamePOs.reduce((total, objective) => total + (publicObjectives[objective.id - 1] ? objective.vp : 0), 0);
     const sovp = secretObjectives.reduce((total, so, i) => total + (so.cleared ? so.objective.vp : 0), 0);
     const totalvp = povp + sovp + victoryPoints;
 

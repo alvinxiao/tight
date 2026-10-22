@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import cors from 'cors';
-import express, { Request, Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import http, { type Server as HttpServer } from 'http';
 import https, { type Server as HttpsServer } from 'https';
 import ip from 'ip';
@@ -22,8 +22,8 @@ const html = path.join(distDir, 'index.html');
 const publicPath = express.static(distDir);
 app.use(publicPath);
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '64kb' }));
+app.use(express.urlencoded({ extended: false, limit: '64kb', parameterLimit: 100 }));
 
 app.use('/api', initializeRouter());
 app.use('/api', (_req: Request, res: Response) => {
@@ -32,6 +32,22 @@ app.use('/api', (_req: Request, res: Response) => {
 
 app.get('*', (req: Request, res: Response) => {
     res.sendFile(html);
+});
+
+app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) {
+        next(error);
+        return;
+    }
+    const parserType = typeof error === 'object' && error !== null && 'type' in error ? error.type : null;
+    if (parserType === 'entity.too.large') {
+        res.status(413).json({ error: 'Request too large' });
+    } else if (parserType === 'entity.parse.failed') {
+        res.status(400).json({ error: 'Invalid JSON body' });
+    } else {
+        console.error('Unhandled request error', error instanceof Error ? error.stack : 'Unknown error');
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 let protocol = 'http';

@@ -25,3 +25,16 @@ jobs:
       - run: npm run build:client
         env:
           TIGHT_USE_HTTP: 'true'
+      - run: npm run typecheck:browser
+      - name: Install Chromium
+        if: runner.os == 'Linux'
+        run: npx playwright install --with-deps chromium
+      - name: Browser regression tests
+        if: runner.os == 'Linux'
+        run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure() && runner.os == 'Linux'
+        with:
+          name: browser-test-results
+          path: test-results/
+          if-no-files-found: ignore

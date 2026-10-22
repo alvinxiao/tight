@@ -9,7 +9,8 @@ import {
     StrategyCardIndex,
     Game,
 } from 'common/Game.js';
-import { Message, MessageType } from 'common/message.js';
+import { MessageType } from 'common/message.js';
+import { ClientCommand } from './commandSchemas.js';
 
 import * as GameDB from './database/game.js';
 import * as PlanetDB from './database/planet/index.js';
@@ -46,14 +47,15 @@ function addPlayer(ws: WebSocket, game: Game, playerId: string | null, factionNa
 export interface handleMessageParams {
     wss: WebSocketServer;
     ws: WebSocket;
-    message: Message;
+    message: ClientCommand;
 }
 
 // TODO: Organize better.
 // Handle all messages to the WebSocket server.
 export default function handleMessage({ wss, ws, message }: handleMessageParams) {
     const { type, data } = message;
-    const { gameId = null, factionName = null, ...otherData } = data || {};
+    const { gameId } = data;
+    const requestedFactionName = 'factionName' in data ? data.factionName : null;
 
     logWS(false, getWebSocketLogId(ws), { type, data });
 
@@ -68,33 +70,30 @@ export default function handleMessage({ wss, ws, message }: handleMessageParams)
             ws.gameId = gameId;
             markGameDirty(gameId, { created: true });
 
-            const { playerId } = otherData;
+            const { playerId } = data;
             if (playerId) {
-                addPlayer(ws, game, playerId, factionName);
+                addPlayer(ws, game, playerId, requestedFactionName);
             }
             break;
         }
 
         case MessageType.GAME_ADD_PLAYER: {
-            const { playerId } = otherData;
+            const { playerId } = data;
             if (playerId) {
-                addPlayer(ws, game, playerId, factionName);
+                addPlayer(ws, game, playerId, requestedFactionName);
             }
             break;
         }
 
         case MessageType.GAME_UPDATE_FACTION: {
-            const { order, ...factionData } = otherData;
-            const { numPlayers } = game;
-            if (order < numPlayers) {
-                GameDB.updateFaction({ gameId, order, ...factionData });
-                markGameDirty(gameId, { factions: true });
-            }
+            const { gameId: _gameId, order, ...factionData } = data;
+            GameDB.updateFaction({ gameId, order, ...factionData });
+            markGameDirty(gameId, { factions: true });
             break;
         }
 
         case MessageType.GAME_REORDER_FACTION: {
-            if (GameDB.reorderFaction({ gameId, ...otherData })) {
+            if (GameDB.reorderFaction({ gameId, index: data.index, newIndex: data.newIndex })) {
                 markGameDirty(gameId, { factions: true, status: true });
             }
             break;
@@ -229,10 +228,11 @@ export default function handleMessage({ wss, ws, message }: handleMessageParams)
 
     // Following actions require a faction
     const factions = game.factions;
-    const faction = factions.find(f => f.name === factionName);
+    const faction = factions.find(f => f.name === requestedFactionName);
     if (!faction) {
         return;
     }
+    const factionName = faction.name;
 
     switch (type) {
         case MessageType.TAKE_NAALU_ZERO_TOKEN:

@@ -60,6 +60,10 @@ export default function useWebSocket(options: WebSocketOptions) {
 
     const onClose = useCallback((e: CloseEvent) => {
         const { connecting, connectError } = optionsRef.current.state;
+        if (e.code === 1008) {
+            optionsRef.current.dispatch({ type: ActionType.setConnecting, payload: { connecting: false, connectError: true } });
+            return;
+        }
         if (!e.wasClean && !connecting && !connectError) {
             connect();
         }
