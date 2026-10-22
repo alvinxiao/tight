@@ -19,3 +19,9 @@ Standalone CLI startup prints the configured interface URL when `TIGHT_HOST` is 
 ## Verification
 
 `npm test` runs real HTTP and WebSocket requests for matching origins, cross-origin reads and mutations, preflights, DNS-rebinding-style Host headers, duplicate headers, and response security headers. The existing browser and desktop journeys verify normal clients keep working. CI runs the backend suite on Linux and Windows.
+
+## Configured HTTPS
+
+For standalone HTTPS, set `SSL_TIGHT_KEY_PATH` and `SSL_TIGHT_CRT_PATH` to the private key and certificate files and leave `TIGHT_USE_HTTP` unset or false. These settings accept operating-system filesystem paths, including spaces, Unicode, and `#`. Relative paths resolve from the backend's working directory. Use a certificate trusted by the participating browsers; the desktop's managed local HTTP listener does not need one.
+
+`tests/https.test.mjs` starts an actual configured HTTPS listener on an available nondefault port. Its HTTPS and WSS clients trust only the local test certificate. It verifies matching origins work, an HTTP origin cannot access the HTTPS backend, and an ordinary client rejects the self-signed fixture. `tests/browser/https.spec.ts` covers setup, starting a game, phone pairing, Unicode identities, and reload against the HTTPS origin. Self-signed acceptance is limited to those disposable browser contexts. The existing desktop suite covers the managed window and packaged Windows executable.
