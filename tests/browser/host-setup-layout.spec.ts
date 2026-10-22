@@ -42,6 +42,8 @@ for (const slots of [2, 6, 8]) {
         try {
             await expectOneScreen(page, slots);
             await page.screenshot({ path: testInfo.outputPath(`setup-${slots}-1200.png`) });
+            await page.setViewportSize({ width: 1024, height: 720 });
+            await expectOneScreen(page, slots);
             await page.setViewportSize({ width: 1280, height: 800 });
             await expectOneScreen(page, slots);
             if (slots === 8) {

@@ -83,6 +83,7 @@ function FactionsSetup(props: FactionsSetupProps) {
             sx={{
                 '& .MuiOutlinedInput-root': { height: { md: 44 } },
                 '& .MuiSelect-select': { py: { md: '10.5px' } },
+                '& .MuiFormHelperText-root': { lineHeight: { md: '16px' }, mt: { md: '2px' } },
                 '& .MuiIconButton-root': { p: { md: 0.5 }, mr: { md: 3 }, minWidth: { md: 44 }, minHeight: { md: 44 } },
             }}
         >
@@ -122,7 +123,7 @@ function FactionsSetup(props: FactionsSetupProps) {
                                 gridTemplateColumns: { md: 'minmax(0, 1.5fr) minmax(0, 0.7fr) minmax(0, 1.2fr)' },
                                 gap: { md: 1.5 },
                                 width: '100%',
-                                padding: { xs: '16px 8px 16px 0px', md: '6px 8px 6px 0px' },
+                                padding: { xs: '16px 8px 16px 0px', md: '6px 8px 1px 0px' },
                             }}
                         >
                             <FactionSelect
