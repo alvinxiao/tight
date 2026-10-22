@@ -80,7 +80,7 @@ function PlayerSetup() {
                     <Grid container justifyContent="flex-end" alignItems="center" spacing={1}>
                         {pending ? (
                             <Grid item>
-                                <CircularProgress size={24} />
+                                <CircularProgress aria-label="Starting game" size={24} />
                             </Grid>
                         ) : null}
                         <Grid item>

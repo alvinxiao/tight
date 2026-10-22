@@ -112,7 +112,7 @@ function Factions() {
             </AppBar>
             {pending ? (
                 <Grid sx={{ height: '100%' }} container justifyContent="center" alignItems="center" direction="column">
-                    <CircularProgress size={'50vw'} />
+                    <CircularProgress aria-label="Loading faction details" size={'50vw'} />
                 </Grid>
             ) : (
                 <FactionInfo faction={factionInfo} expanded={expanded} onExpandedChange={onExpandedChange} />

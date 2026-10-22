@@ -78,7 +78,9 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
         }
         setInvalid(false);
 
-        void run(signal => api.gameValidate({ gameId: id }, { signal }), exists => {
+        void run(
+            signal => api.gameValidate({ gameId: id }, { signal }),
+            exists => {
                 if (exists) {
                     navigate(`/${id}`);
                 } else {
@@ -90,11 +92,12 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                         setInvalid(true);
                     }
                 }
-            });
+            },
+        );
     };
 
     return (
-        <Dialog open={open} fullScreen>
+        <Dialog PaperProps={{ 'aria-label': 'Join game' }} open={open} onClose={onCancel} fullScreen>
             <AppBar sx={styles.appBar}>
                 <Toolbar>
                     <Tooltip title="Close">
@@ -115,7 +118,13 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                                 color="primary"
                                 variant="outlined"
                                 label="Game Code"
-                                helperText={error === 'invalid' ? 'Invalid Game Code' : error === 'network' ? 'Could not reach the host. Try again.' : ''}
+                                helperText={
+                                    error === 'invalid'
+                                        ? 'Invalid Game Code'
+                                        : error === 'network'
+                                          ? 'Could not reach the host. Try again.'
+                                          : ''
+                                }
                                 error={Boolean(error)}
                                 onChange={e => setGameId(e.target.value.toUpperCase())}
                                 value={gameId}
@@ -132,7 +141,7 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                                 size="large"
                                 onClick={e => onJoinClick(e, gameId)}
                             >
-                                {joining ? <CircularProgress size={24} /> : 'Join'}
+                                {joining ? <CircularProgress aria-label="Joining game" size={24} /> : 'Join'}
                             </Button>
                         </FormControl>
                     </Grid>
@@ -148,7 +157,7 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                                         size="large"
                                         onClick={e => onJoinClick(e, currentGameId)}
                                     >
-                                        {joining ? <CircularProgress size={24} /> : `Rejoin "${currentGameId}"`}
+                                        {joining ? <CircularProgress aria-label="Joining game" size={24} /> : `Rejoin "${currentGameId}"`}
                                     </Button>
                                 </FormControl>
                             </Grid>
@@ -166,7 +175,7 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                                         }}
                                     >
                                         {joining ? (
-                                            <CircularProgress size={24} />
+                                            <CircularProgress aria-label="Joining game" size={24} />
                                         ) : (
                                             `Rejoin "${currentGameId}" as new player`
                                         )}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 
 import AddIcon from '@mui/icons-material/AddCircle';
 import ArrowIcon from '@mui/icons-material/ArrowForward';
@@ -164,6 +164,7 @@ export interface PlayerNameDialogProps {
 }
 
 export default function EditPlanetDialog(props: PlayerNameDialogProps) {
+    const selectId = useId();
     const { open, onClose, planet } = props;
     const { name: planetId, modifiers: planetModifiers = {} } = planet;
     const { sendData } = useAppContext();
@@ -238,7 +239,7 @@ export default function EditPlanetDialog(props: PlayerNameDialogProps) {
     };
 
     return (
-        <Dialog open={open} fullScreen>
+        <Dialog PaperProps={{ 'aria-label': 'Edit planet' }} open={open} onClose={onClose} fullScreen>
             <AppBar sx={styles.appBar}>
                 <Toolbar>
                     <Tooltip title="Close">
@@ -270,6 +271,7 @@ export default function EditPlanetDialog(props: PlayerNameDialogProps) {
                                 editField = (
                                     <TextField
                                         fullWidth
+                                        id={`${selectId}-${nameField}`}
                                         label={nameField}
                                         InputLabelProps={{ shrink: true }}
                                         onChange={onTraitsChange}

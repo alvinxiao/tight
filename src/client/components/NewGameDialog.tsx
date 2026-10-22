@@ -56,19 +56,23 @@ function NewGameDialog(props: NewGameDialogProps) {
         onClose();
     };
 
-    const onSave = () => run(signal => api.gameCreate(gameOptions, { signal }), gameCode => {
-        if (gameCode) {
-            dispatch({ type: ActionType.setPlayerId, payload: null });
-            navigate(`/${gameCode}`);
-        }
-        onClose();
-    });
+    const onSave = () =>
+        run(
+            signal => api.gameCreate(gameOptions, { signal }),
+            gameCode => {
+                if (gameCode) {
+                    dispatch({ type: ActionType.setPlayerId, payload: null });
+                    navigate(`/${gameCode}`);
+                }
+                onClose();
+            },
+        );
 
     const { publicObjectives } = gameOptions;
     const hasError = !publicObjectives?.length;
 
     return (
-        <Dialog open={open} fullScreen>
+        <Dialog PaperProps={{ 'aria-label': 'Create new game' }} open={open} onClose={onCancel} fullScreen>
             <AppBar sx={styles.appBar}>
                 <Toolbar>
                     <Tooltip title="Close">
@@ -85,7 +89,12 @@ function NewGameDialog(props: NewGameDialogProps) {
                 </Button>
             </AppBar>
             <DialogContent dividers>
-                {createError && <Alert severity="error">Could not create the game or confirm it was saved. Close this dialog and check saved games before trying again.</Alert>}
+                {createError && (
+                    <Alert severity="error">
+                        Could not create the game or confirm it was saved. Close this dialog and check saved games
+                        before trying again.
+                    </Alert>
+                )}
                 <NewGameForm gameOptions={gameOptions} onChange={options => setGameOptions(options)} />
             </DialogContent>
         </Dialog>

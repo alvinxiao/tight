@@ -138,7 +138,7 @@ export default function GameWrapper(props: GameWrapperProps): ReactElement {
     if (!initialized || !strategyCardsLoaded || (gameIdToLoad && (!gameLoaded || gameId !== gameIdToLoad))) {
         return (
             <Grid sx={{ height: '100%' }} container justifyContent="center" alignItems="center" direction="column">
-                <CircularProgress size="50vw" />
+                <CircularProgress aria-label="Loading game" size="50vw" />
             </Grid>
         );
     }

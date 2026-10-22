@@ -18,30 +18,32 @@ test('host creates and starts a game; an independent phone browser joins', async
     try {
         await page.goto('/');
         await page.getByRole('button', { name: 'Create Game', exact: true }).click();
-        await page.getByRole('combobox').first().click();
+        await page.getByRole('combobox', { name: 'Number of Players', exact: true }).click();
         await page.getByRole('option', { name: '2', exact: true }).click();
         await page.getByRole('button', { name: 'Save', exact: true }).click();
         await expect(page.getByRole('textbox', { name: 'Enter Name', exact: true })).toBeVisible();
         id = new URL(page.url()).pathname.split('/')[1];
         await register(page, 'Host');
-        await expect(page.getByRole('combobox').nth(1)).toBeVisible();
+        await expect(page.getByRole('combobox', { name: /^Faction /u }).first()).toBeVisible();
         for (const [index, name, color] of [
             [0, 'The Arborec', 'RED'],
             [1, 'The Emirates of Hacan', 'BLUE'],
         ] as const) {
-            // Accessible names for these legacy controls are tracked in issue #17.
             await page
-                .getByRole('combobox')
-                .nth(index * 4 + 1)
+                .getByRole('combobox', { name: /^Faction /u })
+                .nth(index)
                 .click();
             await page.getByRole('option', { name, exact: true }).click();
             await page
-                .getByRole('combobox')
-                .nth(index * 4 + 2)
+                .getByRole('combobox', { name: /^Color /u })
+                .nth(index)
                 .click();
             await page.getByRole('option', { name: color, exact: true }).click();
         }
-        await page.getByRole('combobox').nth(3).click();
+        await page
+            .getByRole('combobox', { name: /^Players \(none, one, or multiple\)/u })
+            .first()
+            .click();
         await page.getByRole('option', { name: 'Host', exact: true }).click();
         await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
         await page.getByRole('button', { name: 'Start', exact: true }).click();
@@ -50,7 +52,9 @@ test('host creates and starts a game; an independent phone browser joins', async
         await page.getByRole('button', { name: 'Pair a device', exact: true }).click();
         await page.getByRole('textbox', { name: 'Player name', exact: true }).fill('Phone guest');
         await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
-        const invitation = await page.getByRole('textbox', { name: 'One-use invitation link', exact: true }).inputValue();
+        const invitation = await page
+            .getByRole('textbox', { name: 'One-use invitation link', exact: true })
+            .inputValue();
         await page.getByRole('button', { name: 'Close', exact: true }).click();
         const phone = await guest.newPage();
         phone.on('pageerror', error => errors.push(error.message));
@@ -60,9 +64,14 @@ test('host creates and starts a game; an independent phone browser joins', async
         await expect(phone.getByRole('button', { name: 'Pair a device', exact: true })).not.toBeVisible();
         expect(new URL(phone.url()).hash).toBe('');
         await page.goto(`/${id}/players`);
-        await page.getByRole('combobox').nth(7).click();
+        await page
+            .getByRole('combobox', { name: /^Players \(none, one, or multiple\)/u })
+            .nth(1)
+            .click();
         await page.getByRole('option', { name: 'Phone guest', exact: true }).click();
-        await expect(page.getByRole('combobox').nth(7)).toContainText('Phone guest');
+        await expect(page.getByRole('combobox', { name: /^Players \(none, one, or multiple\)/u }).nth(1)).toContainText(
+            'Phone guest',
+        );
         await page.goto(`/${id}/status`);
         await page.getByRole('button', { name: /^Take leadership$/i }).click();
         await expect(phone.getByRole('button', { name: /^Take trade$/i })).toBeEnabled();
@@ -276,7 +285,9 @@ test('catalog failures recover and stalled or cancelled dialogs do not trap the 
     await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
 
     let release: () => void = () => {};
-    const held = new Promise<void>(resolve => { release = resolve; });
+    const held = new Promise<void>(resolve => {
+        release = resolve;
+    });
     await page.route('**/api/game/create', async route => {
         await held;
         await route.fulfill({ status: 200, contentType: 'application/json', body: '"ABCD"' }).catch(() => {});
@@ -292,8 +303,12 @@ test('catalog failures recover and stalled or cancelled dialogs do not trap the 
 
     let releaseLate: () => void = () => {};
     let completed: () => void = () => {};
-    const late = new Promise<void>(resolve => { releaseLate = resolve; });
-    const handlerCompleted = new Promise<void>(resolve => { completed = resolve; });
+    const late = new Promise<void>(resolve => {
+        releaseLate = resolve;
+    });
+    const handlerCompleted = new Promise<void>(resolve => {
+        completed = resolve;
+    });
     await page.route('**/api/game/create', async route => {
         await late;
         await route.fulfill({ status: 200, contentType: 'application/json', body: '"ABCD"' }).catch(() => {});
@@ -327,8 +342,12 @@ test('a command sent after the socket closes offers reconnect instead of silentl
     await page.goto('/');
     await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
     // Returning a valid code reaches GAME_LOAD without creating a persistent game for this scenario.
-    await page.route('**/api/game/create', route => route.fulfill({ status: 200, contentType: 'application/json', body: '"ABCD"' }));
-    await page.route('**/api/game/validate?*', route => route.fulfill({ status: 200, contentType: 'application/json', body: 'true' }));
+    await page.route('**/api/game/create', route =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: '"ABCD"' }),
+    );
+    await page.route('**/api/game/validate?*', route =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: 'true' }),
+    );
     await page.evaluate(() => {
         const socket = Reflect.get(window, 'testGameSocket');
         if (!(socket instanceof WebSocket)) throw new Error('Missing game socket');
@@ -347,7 +366,9 @@ test('malformed successful responses fail visibly and render failures offer relo
     await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Create Game', exact: true }).click();
     for (const body of ['{', '{}', 'null']) {
-        await page.route('**/api/game/create', route => route.fulfill({ status: 200, contentType: 'application/json', body }));
+        await page.route('**/api/game/create', route =>
+            route.fulfill({ status: 200, contentType: 'application/json', body }),
+        );
         await page.getByRole('button', { name: 'Save', exact: true }).click();
         await expect(page.getByRole('alert')).toContainText('Could not create the game');
         await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
@@ -355,7 +376,9 @@ test('malformed successful responses fail visibly and render failures offer relo
         await page.unroute('**/api/game/create');
     }
     await page.getByRole('button', { name: 'Close', exact: true }).click();
-    await page.route('**/api/faction/get-faction?*', route => route.fulfill({ status: 200, contentType: 'application/json', body: '[{"startingTech":5}]' }));
+    await page.route('**/api/faction/get-faction?*', route =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: '[{"startingTech":5}]' }),
+    );
     await page.goto('/factions');
     await expect(page.getByRole('button', { name: 'Reload TIGHT', exact: true })).toBeVisible();
     await page.unroute('**/api/faction/get-faction?*');

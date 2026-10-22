@@ -17,12 +17,14 @@ declare module '@mui/styles/defaultTheme' {
 const LIGHT_THEME = createTheme({
     palette: {
         mode: 'light',
+        contrastThreshold: 4.5,
     },
 });
 
 const DARK_THEME = createTheme({
     palette: {
         mode: 'dark',
+        contrastThreshold: 4.5,
     },
 });
 

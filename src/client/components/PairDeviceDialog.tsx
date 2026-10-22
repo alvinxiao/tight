@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useId, useEffect, useState } from 'react';
 import {
     Alert,
     Button,
@@ -29,6 +29,7 @@ export default function PairDeviceDialog({
     open: boolean;
     onClose: () => void;
 }) {
+    const selectId = useId();
     const { state: native } = useNativeHosting();
     const sharingOrigin = native.kind === 'ready' ? lanOrigin(native.value) : null;
     const baseOrigin = sharingOrigin || window.location.origin;
@@ -101,6 +102,7 @@ export default function PairDeviceDialog({
                     </Typography>
                     <TextField
                         select
+                        id={selectId}
                         label="Device permission"
                         value={role}
                         disabled={pending}

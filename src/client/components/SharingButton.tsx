@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useId, useEffect, useState } from 'react';
 import {
     Alert,
     Button,
@@ -16,6 +16,7 @@ import { lanOrigin } from 'common/hosting';
 import { useNativeHosting } from '../NativeHosting';
 
 export default function SharingButton() {
+    const selectId = useId();
     const { state, pending, refresh, change } = useNativeHosting();
     const [open, setOpen] = useState(false);
     const [selected, setSelected] = useState('');
@@ -75,6 +76,7 @@ export default function SharingButton() {
                                 )}
                                 <TextField
                                     select
+                                    id={selectId}
                                     label="Wi-Fi or Ethernet network"
                                     value={selected}
                                     disabled={pending}

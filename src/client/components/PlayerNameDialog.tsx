@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useId, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import CloseIcon from '@mui/icons-material/Close';
@@ -59,6 +59,7 @@ interface PlayerNameDialogProps {
 }
 
 export default function PlayerNameDialog(props: PlayerNameDialogProps) {
+    const selectId = useId();
     const { open, onClose } = props;
 
     const { sendData, dispatch } = useAppContext();
@@ -127,7 +128,7 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
     };
 
     return (
-        <Dialog open={open} fullScreen>
+        <Dialog PaperProps={{ 'aria-label': 'Player' }} open={open} onClose={onCancel} fullScreen>
             <AppBar sx={styles.appBar}>
                 <Toolbar>
                     <Tooltip title="Close">
@@ -153,6 +154,7 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
                     <Grid item sx={styles.gridItem}>
                         <FormControl fullWidth variant="standard">
                             <TextField
+                                id={selectId}
                                 label="Select Player"
                                 select
                                 value={
@@ -202,7 +204,7 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
                                 size="large"
                                 onClick={onJoinClick}
                             >
-                                {joining ? <CircularProgress size={24} /> : 'Continue'}
+                                {joining ? <CircularProgress aria-label="Joining game" size={24} /> : 'Continue'}
                             </Button>
                         </FormControl>
                     </Grid>

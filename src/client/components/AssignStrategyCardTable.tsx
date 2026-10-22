@@ -59,6 +59,7 @@ export default function AssignStrategyCardTable() {
                             <TableCell>{formatFactionName(game, faction.name)}</TableCell>
                             <TableCell>
                                 <Select
+                                    inputProps={{ 'aria-label': `Strategy card for ${faction.name}` }}
                                     fullWidth
                                     value={faction.strategyCard}
                                     variant="outlined"
