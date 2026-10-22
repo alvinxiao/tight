@@ -43,22 +43,22 @@ jobs:
         run: npm run build:desktop-backend
       - name: Electron integration tests on Linux
         if: runner.os == 'Linux' && matrix.node == '24.19.0'
-        run: xvfb-run --auto-servernum npx playwright test --config=playwright.desktop.config.ts
+        run: xvfb-run --auto-servernum node scripts/run-ci-tests.mjs desktop
         env:
           TIGHT_ELECTRON_TEST_NO_SANDBOX: 'true'
       - name: Electron integration tests on Windows
         if: runner.os == 'Windows'
-        run: npx playwright test --config=playwright.desktop.config.ts
+        run: node scripts/run-ci-tests.mjs desktop
       - name: Package Windows preview
         if: runner.os == 'Windows'
-        run: node scripts/package-desktop.mjs win32
+        run: node scripts/run-ci-tests.mjs package
       - name: Stage preview in a path with spaces and Unicode
         if: runner.os == 'Windows'
         shell: pwsh
         run: Copy-Item -Path release/TIGHT-win32-x64 -Destination "$env:RUNNER_TEMP/TIGHT preview 测试" -Recurse
       - name: Test packaged Windows executable
         if: runner.os == 'Windows'
-        run: npx playwright test --config=playwright.desktop.config.ts
+        run: node scripts/run-ci-tests.mjs desktop
         env:
           TIGHT_DESKTOP_EXECUTABLE: ${{ runner.temp }}\TIGHT preview 测试\TIGHT.exe
       - uses: actions/upload-artifact@v4
