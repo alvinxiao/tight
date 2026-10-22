@@ -7,6 +7,7 @@ import Context from './Context';
 import AppContent from './AppContent';
 import reducer, { initialState } from './reducer';
 import useWebSocket from './hooks/useWebSocket';
+import { getWebSocketUrl } from './utils/urls';
 
 declare module '@mui/styles/defaultTheme' {
     // eslint-disable-next-line @typescript-eslint/no-empty-interface
@@ -25,14 +26,11 @@ const DARK_THEME = createTheme({
     },
 });
 
-const isHttps = window.location.protocol.split(':')[0].toLowerCase() === 'https';
-const wsProtocol = isHttps ? 'wss' : 'ws';
-
 function App() {
     const [state, dispatch] = useReducer(reducer, initialState);
 
     const { sendData } = useWebSocket({
-        url: `${wsProtocol}://${window.location.hostname}/`,
+        url: getWebSocketUrl(window.location.origin),
         dispatch,
         state,
     });

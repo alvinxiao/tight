@@ -9,7 +9,7 @@ import {
     StrategyCardIndex,
     Game,
 } from 'common/Game.js';
-import { MessageType } from 'common/message.js';
+import { Message, MessageType } from 'common/message.js';
 
 import * as GameDB from './database/game.js';
 import * as PlanetDB from './database/planet/index.js';
@@ -46,21 +46,16 @@ function addPlayer(ws: WebSocket, game: Game, playerId: string | null, factionNa
 export interface handleMessageParams {
     wss: WebSocketServer;
     ws: WebSocket;
-    message: string;
+    message: Message;
 }
 
 // TODO: Organize better.
 // Handle all messages to the WebSocket server.
 export default function handleMessage({ wss, ws, message }: handleMessageParams) {
-    if (!message) {
-        return;
-    }
-
-    const payload = JSON.parse(message);
-    const { type = null, data = null } = payload || {};
+    const { type, data } = message;
     const { gameId = null, factionName = null, ...otherData } = data || {};
 
-    logWS(false, getWebSocketLogId(ws), payload);
+    logWS(false, getWebSocketLogId(ws), { type, data });
 
     // Following actions require a game
     const game = GameDB.getGame(gameId);
@@ -198,7 +193,7 @@ export default function handleMessage({ wss, ws, message }: handleMessageParams)
         }
 
         case MessageType.GAME_NEXT_ROUND: {
-            if (game.status.round < 10) {
+            if (game.status.round < game.numRounds) {
                 Object.values(game.factions).forEach(f => {
                     f.strategyCard = StrategyCardIndex.NONE;
                     f.strategyCardTaken = false;
@@ -331,7 +326,7 @@ export default function handleMessage({ wss, ws, message }: handleMessageParams)
         // Planet actions
         case MessageType.TAKE_PLANET: {
             const { planetId } = data || {};
-            const planets = GameDB.getPlanetsArray(gameId, planetId);
+            const planets = [...new Set(GameDB.getPlanetsArray(gameId, planetId))].filter(p => p.owner !== factionName);
             const { changedPlanets, changedFactions } = formatChangePlanets(planets, factionName);
 
             planets.forEach(p => {

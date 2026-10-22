@@ -18,6 +18,7 @@ import {
     PlanetListResults,
     StrategyCardListResults,
 } from 'common/api';
+import { getApiUrl } from './urls';
 
 async function get<
     Params extends Record<string, string | number | boolean> = Record<string, string | number | boolean>,
@@ -25,11 +26,10 @@ async function get<
 >(url: string, params?: Params): Promise<Result> {
     const queryParams =
         params &&
-        Object.entries(params)
-            .map(([key, value]) => `${key}=${String(value)}`)
-            .join('&');
+        new URLSearchParams(Object.entries(params).map(([key, value]) => [key, String(value)])).toString();
     const fullUrl = queryParams ? `${url}?${queryParams}` : url;
     const response = await fetch(fullUrl, { method: 'GET' });
+    if (!response.ok) throw new Error(`Request failed (${response.status})`);
     return response.json();
 }
 
@@ -49,14 +49,14 @@ async function post<Params extends Record<string, unknown> = Record<string, unkn
         referrerPolicy: 'no-referrer',
         body: params ? JSON.stringify(params) : undefined,
     });
+    if (!response.ok) throw new Error(`Request failed (${response.status})`);
     return response.json();
 }
 
 type APIRequest<Params, Result> = (params: Params) => Promise<Result>;
 
 function buildUrl(operation: string) {
-    const { protocol, host } = window.location;
-    return `${protocol}//${window.location.host}/api${operation}`;
+    return getApiUrl(window.location.origin, operation);
 }
 
 function createGet<

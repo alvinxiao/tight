@@ -13,9 +13,9 @@ import {
     GameValidateResult,
 } from 'common/api.js';
 
-import { createGame, deleteGame, getGame, restartGame } from '../database/game.js';
+import { createGame, getGame, restartGame } from '../database/game.js';
 
-import { markGameDirty } from '../dirty.js';
+import { deleteGameAndNotify, markGameDirty } from '../dirty.js';
 import { PostRequest, GetRequest } from './types.js';
 
 export default function initializeGameOperations(router: Router) {
@@ -24,7 +24,7 @@ export default function initializeGameOperations(router: Router) {
         res.status(200).json(game.id);
     });
 
-    router.post('/game/restart', (req: PostRequest<GameRestartParams>, res: Response<GameRestartResult>): void => {
+    router.post('/game/restart', (req: PostRequest<GameRestartParams>, res: Response<GameRestartResult | { error: string }>): void => {
         const game = restartGame(req.body);
         if (game) {
             // respond with success
@@ -34,12 +34,12 @@ export default function initializeGameOperations(router: Router) {
             markGameDirty(game.id, { created: true });
         } else {
             // respond with invalid params error
-            res.status(422);
+            res.status(404).json({ error: 'Game not found' });
         }
     });
 
     router.post('/game/delete', (req: PostRequest<GameDeleteParams>, res: Response<GameDeleteResult>): void => {
-        const response = deleteGame(req.body.id);
+        const response = deleteGameAndNotify(req.body.id);
         res.status(200).json(response);
     });
 
