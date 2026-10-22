@@ -17,7 +17,7 @@ To use HTTP instead, set the environment variable TIGHT_USE_HTTP=true.
 
 `npm ci --legacy-peer-deps`
 
-Use Node 24.19.0 (recommended) or at least 22.13.0. CI covers both versions. The legacy peer-dependency option is required by the current dependency graph.
+Use Node 24.19.0 (recommended) or at least 22.15.0. CI covers both versions. The legacy peer-dependency option is required by the current dependency graph.
 
 ### 2. Build server and client
 
@@ -86,3 +86,5 @@ See [the desktop guide](docs/windows-desktop.md) for the preview artifact, devel
 ## Network boundaries
 
 The backend rejects unexpected Host headers and foreign browser origins for HTTP and WebSocket requests. See [network boundaries](docs/network-boundaries.md) for supported addresses, development proxy behavior, and the remaining authentication work.
+
+Dependency audit policy, remaining development advisories, and packaged notices: [dependency security](docs/dependency-security.md).

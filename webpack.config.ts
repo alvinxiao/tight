@@ -117,6 +117,7 @@ if (dev) {
 
     if (web) {
         config.devServer = {
+            host: '127.0.0.1',
             static: {
                 directory: path.resolve(cwd, 'dist'),
             },
