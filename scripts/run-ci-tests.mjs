@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 const mode = process.argv[2] || 'backend';
 const command = new Map([
     ['backend', 'npm test'],
+    ['browser', 'npx playwright test'],
     ['desktop', 'npx playwright test --config=playwright.desktop.config.ts'],
     ['package', 'node scripts/package-desktop.mjs win32'],
 ]).get(mode);

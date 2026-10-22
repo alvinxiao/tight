@@ -38,7 +38,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Browser regression tests
         if: runner.os == 'Linux' && matrix.node == '24.19.0'
-        run: npx playwright test
+        run: node scripts/run-ci-tests.mjs browser
       - name: Build bundled desktop backend
         if: matrix.node == '24.19.0'
         run: npm run build:desktop-backend
