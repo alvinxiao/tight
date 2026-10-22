@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import EditIcon from '@mui/icons-material/Edit';
 import SyncIcon from '@mui/icons-material/Sync';
@@ -10,7 +10,6 @@ import { debounce, isEmpty } from 'lodash-es';
 
 import { GamePlanetMap } from 'common/Game';
 import { MessageType } from 'common/message';
-import { PlanetMap } from 'common/Planet';
 
 import AddPlanetDialog from '../components/AddPlanetDialog';
 import PlanetIconInfoButton from '../components/PlanetIconInfoButton';
@@ -20,6 +19,8 @@ import useAutoNavigate from '../hooks/useAutoNavigate';
 import useGameInfo from '../hooks/useGameInfo';
 import { SendDataFunction } from '../hooks/useWebSocket';
 import api from '../utils/api';
+import useRemoteData from '../hooks/useRemoteData';
+import LoadFailure from '../components/LoadFailure';
 import { getPlanetValue } from '../utils/planet';
 
 import { useAppContext } from '../Context';
@@ -69,8 +70,10 @@ function Planets() {
     const classes = useStyle();
     const { sendData } = useAppContext();
     const { game, gameId, playerId } = useGameInfo();
-    const [planetMap, setPlanetMap] = useState<PlanetMap>({});
-    const [pending, setPending] = useState(true);
+    const load = useCallback((signal: AbortSignal) => api.planetList(undefined, { signal }), []);
+    const { resource, retry } = useRemoteData(load);
+    const pending = resource.kind === 'loading';
+    const planetMap = resource.kind === 'loaded' ? resource.data : {};
     const [factionName, setFactionName] = useState(() => {
         const faction = playerId && game ? game.factions.find(f => f.playerIds.includes(playerId)) : null;
         return faction?.name || '';
@@ -101,19 +104,14 @@ function Planets() {
         [],
     );
 
+    useEffect(() => () => syncPlanets.cancel(), [syncPlanets]);
+
     // Get all planets owned by this faction
     const gamePlanets = game?.planets;
     const faction = game?.factions.find(f => f.name === factionName);
     const factionPlanetNames = faction?.planets || [];
 
     useAutoNavigate({ to: `/`, condition: () => !gameId || !playerId, deps: [gameId, playerId] });
-
-    useEffect(() => {
-        api.planetList().then(planets => {
-            setPlanetMap(planets);
-            setPending(false);
-        });
-    }, []);
 
     // Sync with store data
     useEffect(
@@ -159,6 +157,7 @@ function Planets() {
         [gamePlanets, factionPlanetNames],
     );
 
+    if (resource.kind === 'error') return <LoadFailure retry={retry} />;
     if (pending) {
         return null;
     }

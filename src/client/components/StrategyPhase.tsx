@@ -1,11 +1,10 @@
-import React, { MouseEvent, useEffect, useState } from 'react';
+import React, { MouseEvent } from 'react';
 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Grid, Toolbar, Typography } from '@mui/material';
 
 import {
     StrategyCardIndex,
-    StrategyCard as StrategyCardType,
     buildStrategyCardOwners,
     getFactionTurn,
     getNaalu,
@@ -15,7 +14,6 @@ import { MessageType } from 'common/message';
 
 import AssignStrategyCardTable from '../components/AssignStrategyCardTable';
 import useGameInfo from '../hooks/useGameInfo';
-import api from '../utils/api';
 
 import { useAppContext } from '../Context';
 import { Accordion, AccordionDetails, AccordionSummary } from './Accordion';
@@ -43,13 +41,7 @@ function getCardOwnwer(
 
 function StrategyPhase() {
     const { sendData } = useAppContext();
-    const [strategyCards, setStrategryCards] = useState<StrategyCardType[]>([]);
-
-    useEffect(() => {
-        api.strategyCardList().then(cards => setStrategryCards(cards));
-    }, []);
-
-    const { game, gameId, playerId } = useGameInfo();
+    const { game, gameId, playerId, strategyCards } = useGameInfo();
     if (!game) {
         return null;
     }
@@ -89,7 +81,7 @@ function StrategyPhase() {
 
     return (
         <Grid container direction="column">
-            {strategyCards.map((card?: StrategyCardType) => {
+            {strategyCards.map((card) => {
                 if (!card) {
                     return null;
                 }

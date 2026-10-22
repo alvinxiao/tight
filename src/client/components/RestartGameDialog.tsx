@@ -20,6 +20,7 @@ import {
 
 import useGameInfo from '../hooks/useGameInfo';
 import api from '../utils/api';
+import useDialogRequest from '../hooks/useDialogRequest';
 
 import NewGameForm, { GameOptions, DEFAULT_GAME_OPTIONS } from './NewGameForm';
 
@@ -44,8 +45,7 @@ interface RestartGameDialogProps {
 export default function RestartGameDialog(props: RestartGameDialogProps) {
     const { open, onClose } = props;
 
-    const [restartingGame, setRestartingGame] = useState(false);
-    const [restartError, setRestartError] = useState(false);
+    const { pending: restartingGame, error: restartError, run, cancel } = useDialogRequest(open);
 
     const { game } = useGameInfo();
 
@@ -64,25 +64,14 @@ export default function RestartGameDialog(props: RestartGameDialogProps) {
     }
 
     const onCancel = () => {
+        cancel();
         onClose?.();
     };
 
-    const onRestart = async () => {
-        setRestartingGame(true);
-        setRestartError(false);
-        try {
-            const gameCode = await api.gameRestart({ id: game.id, ...gameOptions });
-            if (gameCode) {
-                navigate(`/${gameCode}`);
-            }
-
-            onClose?.();
-        } catch {
-            setRestartError(true);
-        } finally {
-            setRestartingGame(false);
-        }
-    };
+    const onRestart = () => run(signal => api.gameRestart({ id: game.id, ...gameOptions }, { signal }), gameCode => {
+        if (gameCode) navigate(`/${gameCode}`);
+        onClose();
+    });
 
     return (
         <Dialog open={open} fullScreen>
@@ -101,7 +90,7 @@ export default function RestartGameDialog(props: RestartGameDialogProps) {
                 </Toolbar>
             </AppBar>
             <DialogContent dividers>
-                {restartError && <Alert severity="error">Could not restart the game. Check your connection and try again.</Alert>}
+                {restartError && <Alert severity="error">Could not restart the game or confirm its state. Close this dialog and check the game before trying again.</Alert>}
                 <Box display="flex" flexDirection="column">
                     <Typography>
                         Restarting the game will reset all progress. Update any game settings below and click "Restart

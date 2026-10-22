@@ -237,3 +237,102 @@ test('saved games can resume, export, delete with confirmation, and import with 
         await request.post('/api/game/delete', { data: { id } });
     }
 });
+
+test('catalog failures recover and stalled or cancelled dialogs do not trap the user', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.route('**/api/strategy-card/list', route => route.fulfill({ status: 503, body: '{}' }));
+    await page.goto('/');
+    await expect(page.getByRole('alert')).toContainText('Could not load game data');
+    await page.unroute('**/api/strategy-card/list');
+    await page.getByRole('button', { name: 'Retry loading game', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
+
+    let release: () => void = () => {};
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/api/game/create', async route => {
+        await held;
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '"ABCD"' }).catch(() => {});
+    });
+    await page.getByRole('button', { name: 'Create Game', exact: true }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+    await expect(page.getByRole('alert')).toContainText('check saved games', { timeout: 20000 });
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+    release();
+    await page.unroute('**/api/game/create');
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+
+    let releaseLate: () => void = () => {};
+    let completed: () => void = () => {};
+    const late = new Promise<void>(resolve => { releaseLate = resolve; });
+    const handlerCompleted = new Promise<void>(resolve => { completed = resolve; });
+    await page.route('**/api/game/create', async route => {
+        await late;
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '"ABCD"' }).catch(() => {});
+        completed();
+    });
+    await page.getByRole('button', { name: 'Create Game', exact: true }).click();
+    const started = page.waitForRequest('**/api/game/create');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await started;
+    const cancelled = page.waitForEvent('requestfailed', request => request.url().endsWith('/api/game/create'));
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await cancelled;
+    releaseLate();
+    await handlerCompleted;
+    await expect(page).toHaveURL('/');
+    await page.getByRole('button', { name: 'Create Game', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+    expect(errors).toEqual([]);
+});
+
+test('a command sent after the socket closes offers reconnect instead of silently disappearing', async ({ page }) => {
+    await page.addInitScript(() => {
+        const NativeWebSocket = window.WebSocket;
+        window.WebSocket = class extends NativeWebSocket {
+            constructor(url: string | URL, protocols?: string | string[]) {
+                super(url, protocols);
+                Reflect.set(window, 'testGameSocket', this);
+            }
+        };
+    });
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
+    // Returning a valid code reaches GAME_LOAD without creating a persistent game for this scenario.
+    await page.route('**/api/game/create', route => route.fulfill({ status: 200, contentType: 'application/json', body: '"ABCD"' }));
+    await page.route('**/api/game/validate?*', route => route.fulfill({ status: 200, contentType: 'application/json', body: 'true' }));
+    await page.evaluate(() => {
+        const socket = Reflect.get(window, 'testGameSocket');
+        if (!(socket instanceof WebSocket)) throw new Error('Missing game socket');
+        // Keep the actual close transition; suppress its callback to exercise send's own guard.
+        socket.onclose = null;
+        socket.close();
+        return new Promise<void>(resolve => socket.addEventListener('close', () => resolve(), { once: true }));
+    });
+    await page.getByRole('button', { name: 'Create Game', exact: true }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Reconnect', exact: true })).toBeVisible();
+});
+
+test('malformed successful responses fail visibly and render failures offer reload', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Create Game', exact: true }).click();
+    for (const body of ['{', '{}', 'null']) {
+        await page.route('**/api/game/create', route => route.fulfill({ status: 200, contentType: 'application/json', body }));
+        await page.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(page.getByRole('alert')).toContainText('Could not create the game');
+        await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+        await expect(page).toHaveURL('/');
+        await page.unroute('**/api/game/create');
+    }
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await page.route('**/api/faction/get-faction?*', route => route.fulfill({ status: 200, contentType: 'application/json', body: '[{"startingTech":5}]' }));
+    await page.goto('/factions');
+    await expect(page.getByRole('button', { name: 'Reload TIGHT', exact: true })).toBeVisible();
+    await page.unroute('**/api/faction/get-faction?*');
+    await page.getByRole('button', { name: 'Reload TIGHT', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Reload TIGHT', exact: true })).not.toBeVisible();
+    await expect(page.getByRole('combobox')).toBeVisible();
+});

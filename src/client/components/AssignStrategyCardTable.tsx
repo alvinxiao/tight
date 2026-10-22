@@ -1,5 +1,5 @@
 import { MenuItem, Select, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 
 import {
     GameClientData,
@@ -14,7 +14,6 @@ import {
 import { MessageType } from 'common/message';
 
 import useGameInfo from '../hooks/useGameInfo';
-import api from '../utils/api';
 
 import { useAppContext } from '../Context';
 
@@ -36,13 +35,7 @@ function canSelectStrategyCard(strategyCard: StrategyCard, game: GameClientData,
 
 export default function AssignStrategyCardTable() {
     const { sendData } = useAppContext();
-    const { game, gameId, playerId } = useGameInfo();
-
-    const [strategyCards, setStrategryCards] = useState<StrategyCard[]>([]);
-
-    useEffect(() => {
-        api.strategyCardList().then(cards => setStrategryCards(cards));
-    }, []);
+    const { game, gameId, playerId, strategyCards } = useGameInfo();
 
     if (!game || strategyCards.length === 0) {
         return null;

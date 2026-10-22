@@ -1,5 +1,5 @@
 import { MenuItem, Select, SelectProps, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback } from 'react';
 
 import { MessageType } from 'common/message';
 
@@ -7,6 +7,8 @@ import { useAppContext } from '../Context';
 
 import useGameInfo from '../hooks/useGameInfo';
 import api from '../utils/api';
+import useRemoteData from '../hooks/useRemoteData';
+import LoadFailure from './LoadFailure';
 
 import ColorSelect from './ColorSelect';
 import FactionSelect from './FactionSelect';
@@ -24,10 +26,10 @@ function FactionsSetup(props: FactionsSetupProps) {
     const { factions, players } = game || {};
     const { disableFactionSelect, disableColorNone, disableReordering } = props;
 
-    const [factionNames, setFactionNames] = useState<string[]>([]);
-    useEffect(() => {
-        api.factionListNames().then(names => setFactionNames(names));
-    }, []);
+    const load = useCallback((signal: AbortSignal) => api.factionListNames(undefined, { signal }), []);
+    const { resource, retry } = useRemoteData(load);
+    if (resource.kind === 'error') return <LoadFailure retry={retry} />;
+    const factionNames = resource.kind === 'loaded' ? resource.data : [];
 
     if (!game || !factions || factionNames.length === 0) {
         return null;

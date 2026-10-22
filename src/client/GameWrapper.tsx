@@ -22,6 +22,7 @@ export interface GameWrapperProps {
 export default function GameWrapper(props: GameWrapperProps): ReactElement {
     const [gameLoaded, setGameLoaded] = useState(false);
     const [loadError, setLoadError] = useState(false);
+    const [catalogError, setCatalogError] = useState(false);
     const [loadAttempt, setLoadAttempt] = useState(0);
 
     const {
@@ -54,10 +55,17 @@ export default function GameWrapper(props: GameWrapperProps): ReactElement {
             return;
         }
 
-        api.strategyCardList().then(cards => {
-            dispatch({ type: ActionType.setStrategyCards, payload: cards });
-        });
-    }, [initialized, strategyCards]);
+        const controller = new AbortController();
+        setCatalogError(false);
+        api.strategyCardList(undefined, { signal: controller.signal })
+            .then(cards => {
+                if (!controller.signal.aborted) dispatch({ type: ActionType.setStrategyCards, payload: cards });
+            })
+            .catch(() => {
+                if (!controller.signal.aborted) setCatalogError(true);
+            });
+        return () => controller.abort();
+    }, [initialized, strategyCards, loadAttempt]);
 
     // Ensure game data is loaded from the server.
     useEffect(() => {
@@ -73,10 +81,10 @@ export default function GameWrapper(props: GameWrapperProps): ReactElement {
 
         setGameLoaded(false);
         setLoadError(false);
-        let cancelled = false;
-        api.gameValidate({ gameId: gameIdToLoad })
+        const controller = new AbortController();
+        api.gameValidate({ gameId: gameIdToLoad }, { signal: controller.signal })
             .then(exists => {
-                if (cancelled) return;
+                if (controller.signal.aborted) return;
                 if (exists) {
                     const nextPlayerId =
                         sessionGameId === gameIdToLoad ? sessionStorage.getItem('playerId') || null : null;
@@ -90,10 +98,10 @@ export default function GameWrapper(props: GameWrapperProps): ReactElement {
                 }
             })
             .catch(() => {
-                if (!cancelled) setLoadError(true);
+                if (!controller.signal.aborted) setLoadError(true);
             });
         return () => {
-            cancelled = true;
+            controller.abort();
         };
     }, [initialized, gameIdToLoad, gameId, playerId, loadAttempt]);
 
@@ -116,10 +124,10 @@ export default function GameWrapper(props: GameWrapperProps): ReactElement {
         }
     }, [pathname]);
 
-    if (gameIdToLoad && loadError) {
+    if (catalogError || (gameIdToLoad && loadError)) {
         return (
             <Grid container direction="column" alignItems="center" sx={{ p: 3 }}>
-                <Typography role="alert">Could not load this game. Check the host connection and try again.</Typography>
+                <Typography role="alert">Could not load game data. Check the host connection and try again.</Typography>
                 <Button onClick={() => setLoadAttempt(value => value + 1)}>Retry loading game</Button>
             </Grid>
         );

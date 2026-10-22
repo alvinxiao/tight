@@ -1,6 +1,7 @@
 import { savedGameListSchema } from 'common/savedGames';
 import { isGameCode } from 'common/gameCode';
 import { getApiUrl } from './urls';
+import { readResponse } from './request';
 
 async function checked(response: Response): Promise<Response> {
     if (response.ok) return response;
@@ -13,14 +14,12 @@ async function checked(response: Response): Promise<Response> {
         throw new Error('The host could not save the change. Check its storage and try again.');
     throw new Error('Could not reach the host. Check the connection and try again.');
 }
-async function request(url: string, options?: RequestInit): Promise<Response> {
-    let response: Response;
-    try {
-        response = await fetch(url, options);
-    } catch {
-        throw new Error('Could not reach the host. Check the connection and try again.');
-    }
-    return checked(response);
+async function request<Result>(url: string, options: RequestInit, read: (response: Response) => Promise<Result>): Promise<Result> {
+    return readResponse(url, options, async response => read(await checked(response))).catch(error => {
+        if (options.signal?.aborted) throw error;
+        if (error instanceof Error && !(error instanceof TypeError) && error.name !== 'AbortError') throw error;
+        throw new Error('Could not confirm the result. Check the connection and refresh saved games before trying again.');
+    });
 }
 
 function url(operation: string) {
@@ -28,18 +27,16 @@ function url(operation: string) {
 }
 
 export async function fetchSavedGames(signal?: AbortSignal) {
-    const response = await request(url('list'), { signal });
-    const data: unknown = await response.json();
+    const data: unknown = await request(url('list'), { signal }, response => response.json());
     return savedGameListSchema.parse(data);
 }
 export async function importSavedGame(file: File) {
     if (file.size > 1024 * 1024) throw new Error('The game file is too large. Choose an export smaller than 1 MiB.');
-    const response = await request(url('import'), {
+    const id: unknown = await request(url('import'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: await file.text(),
-    });
-    const id: unknown = await response.json();
+    }, response => response.json());
     if (!isGameCode(id))
         throw new Error('The host returned an invalid game code. Refresh the list before trying again.');
     return id;
@@ -49,11 +46,11 @@ export async function deleteSavedGame(id: string) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
-    });
+    }, response => response.json());
 }
 export async function exportSavedGame(id: string) {
-    const response = await request(`${url('export')}?gameId=${encodeURIComponent(id)}`);
-    const download = URL.createObjectURL(await response.blob());
+    const blob = await request(`${url('export')}?gameId=${encodeURIComponent(id)}`, {}, response => response.blob());
+    const download = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = download;
     anchor.download = `tight-${id}.json`;
