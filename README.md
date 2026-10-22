@@ -59,7 +59,7 @@ The suite covers malformed WebSocket framing, payload limits, configured round l
 
 # Production-readiness work
 
-See [the backlog](docs/production-readiness.md), [GitHub issue links](docs/readiness-issues.json), and [the Windows desktop design](docs/desktop-design.md). Games now persist in a per-user SQLite database. Permissions and full game-rule enforcement are incomplete, and A local-only Electron preview is available; Wi-Fi hosting and signed installation remain pending. These first fixes do not make the application production ready.
+See [the backlog](docs/production-readiness.md), [GitHub issue links](docs/readiness-issues.json), and [the Windows desktop design](docs/desktop-design.md). Games now persist in a per-user SQLite database. An Electron preview supports explicit Wi-Fi sharing, paired devices, and host/player permissions. Full game-rule enforcement, signed installation, and physical Windows/phone qualification remain pending. The application is not yet production ready.
 
 ## Request validation
 
@@ -67,7 +67,7 @@ REST mutation bodies, API queries, WebSocket handshake queries, and all 28 suppo
 
 The current limits follow the setup UI: 1–8 factions, 1–20 rounds, and 1–20 target points. Each game accepts up to 32 player names, each 1–80 characters. Public objectives are limited to 50 entries, with unique IDs from 1–100, descriptions up to 1,024 characters, and point values from 1–10. There are exactly three secret-objective slots. Modifier and extra-point counters are bounded to -100–100. Ordinary JSON bodies and WebSocket frames are limited to 64 KiB; game imports allow 1 MiB. Sparse public-objective checkbox arrays normalize JSON `null` holes to `false`.
 
-These checks validate input and references; they do not grant authorization or implement every game-rule prerequisite. Host/player permissions, acknowledgments, full rule tests, and field-level validation feedback remain tracked in the backlog.
+These checks validate input and references; they do not grant authorization or implement every game-rule prerequisite. Host/player permissions are enforced separately. Acknowledgments, full rule tests, and field-level validation feedback remain tracked in the backlog.
 
 ## Browser tests
 
@@ -77,7 +77,7 @@ In this cloud environment, use the installed system browser without downloading 
 
 ## Saved games
 
-Games survive backend restarts and no longer expire after four hours. See [storage and recovery](docs/game-storage.md) for data locations, backups, export/import, and failure behavior. Set `TIGHT_DATA_DIR=/workspace/.tight-data` when developing in this cloud workspace. The home screen lists saved games with resume, export, import, and confirmed deletion. Player identity across browser sessions and host permissions remain pending.
+Games survive backend restarts and no longer expire after four hours. See [storage and recovery](docs/game-storage.md) for data locations, backups, export/import, and failure behavior. Set `TIGHT_DATA_DIR=/workspace/.tight-data` when developing in this cloud workspace. The home screen lists saved games with resume, export, import, and confirmed deletion. Paired device credentials persist across browser sessions; host and player permissions are enforced. Further identity and resume improvements remain tracked in #18.
 
 ## Windows desktop preview
 

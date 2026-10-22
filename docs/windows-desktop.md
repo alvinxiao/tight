@@ -1,6 +1,6 @@
 # Windows desktop preview
 
-The Electron launcher starts the bundled backend and opens TIGHT without requiring Node or a terminal on the user's PC. It starts on loopback with an available port. This first preview supports games on the host PC; Wi-Fi hosting controls and phone join links are pending in #20 and #21.
+The Electron launcher starts the bundled backend and opens TIGHT without requiring Node or a terminal on the user's PC. It starts on loopback with an available port. The host can enable Wi-Fi sharing on one selected private network and invite players from their phones.
 
 ## Run the preview
 
@@ -10,10 +10,12 @@ The Windows CI job builds and tests the source app, packages a Windows x64 app, 
 2. Extract the entire archive to a folder you can write to.
 3. Open `TIGHT.exe`.
 4. Create a game or resume a save from the home screen.
+5. Open **Wi-Fi sharing**, select your Wi-Fi adapter, and start sharing. If Windows asks, allow TIGHT on Private networks.
+6. Use **Pair device** in the game to create a player invitation. The player scans that private QR code on the same Wi-Fi.
 
 Keep the executable, DLLs, and `resources` folder together. Closing the window offers Keep TIGHT open or Quit and save. Quitting stops the backend and closes player connections. Reopening restores committed games.
 
-This is an unsigned development preview. Signing, an installer, complete license notices, and supported Windows-version qualification remain release work in #23 and #26. There is no automatic updater. Do not distribute this artifact as a production release.
+This is an unsigned development preview. Signing, an installer, final license review, and supported Windows-version qualification remain release work in #23 and #26. There is no automatic updater. Do not distribute this artifact as a production release.
 
 ## Storage
 
@@ -29,7 +31,7 @@ The backend exports `startBackend` from `src/server/bootstrap.ts`; the standalon
 
 An in-process backend would share failures and shutdown with Electron main. A separate Node executable would add another runtime to package and update. The utility process isolates backend failures while reusing Electron's runtime. Main owns process lifecycle; the backend owns game state and storage.
 
-The renderer has Node integration disabled, context isolation and sandboxing enabled, no preload bridge, denied permission requests, restricted navigation, blocked new windows/webviews, and a content-security policy for its backend origin. The window title says local only. Host/player authorization, LAN Origin checks, pairing, and further Electron hardening remain tracked in #4 and #22.
+The renderer has Node integration disabled, context isolation and sandboxing enabled, denied permission requests, restricted navigation, blocked new windows/webviews, and a content-security policy for its backend origin. A narrow preload bridge exposes hosting status and network selection; main verifies the host frame and cookie for every call. The window title reflects local or Wi-Fi mode. Host/player authorization, pairing, and LAN Host/Origin checks apply to both listeners. Remaining hardening is tracked in #22.
 
 ## Development and verification
 
@@ -41,4 +43,4 @@ Linux is a test environment, not a supported release target. A local virtual dis
 
 On this cloud proxy, Electron binary downloads need Node's proxy support: set `NODE_USE_ENV_PROXY=1` and `electron_config_cache=/workspace/.cache/electron` for the download or packaging command. Keep the configured CA trust and proxy settings. Normal Windows CI uses its standard network configuration.
 
-Device pairing uses host-issued one-use invitations. The desktop installs its host cookie through native IPC before opening the UI; it never includes that credential in an invitation link. Current links are local only. See [access sessions](access-sessions.md).
+Device pairing uses host-issued one-use invitations. The desktop installs its host cookie through native IPC before opening the UI; it never includes that credential in an invitation link. With sharing enabled, invitations use the selected LAN address. See [access sessions](access-sessions.md) and [Wi-Fi sharing](lan-hosting.md).

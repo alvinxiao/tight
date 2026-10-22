@@ -81,9 +81,15 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
     }, [game, joining, selectedPlayerId]);
 
     useEffect(() => {
-        if (!open) { setJoining(false); setJoinError(false); }
+        if (!open) {
+            setJoining(false);
+            setJoinError(false);
+        }
         if (!open || !joining) return;
-        const timer = setTimeout(() => { setJoining(false); setJoinError(true); }, 15000);
+        const timer = setTimeout(() => {
+            setJoining(false);
+            setJoinError(true);
+        }, 15000);
         return () => clearTimeout(timer);
     }, [open, joining]);
 
@@ -137,8 +143,12 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
                 </Toolbar>
             </AppBar>
             <DialogContent dividers>
-                {joinError && <Alert severity="error">Could not confirm your player joined. Check the connection and try again.</Alert>}
-                <GameInfoToolbar game={game} sx={{ marginBottom: 1 }} hideRestartButton />
+                {joinError && (
+                    <Alert severity="error">
+                        Could not confirm your player joined. Check the connection and try again.
+                    </Alert>
+                )}
+                <GameInfoToolbar game={game} sx={{ marginBottom: 1 }} hideRestartButton hidePairButton />
                 <Grid container direction="column" justifyContent="center" alignItems="center" spacing={2}>
                     <Grid item sx={styles.gridItem}>
                         <FormControl fullWidth variant="standard">
@@ -172,7 +182,11 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
                                     label="Enter Name"
                                     inputProps={{ maxLength: MAX_PLAYER_NAME_LENGTH }}
                                     error={Boolean(selectedPlayerId) && !isPlayerName(selectedPlayerId)}
-                                    helperText={selectedPlayerId && !isPlayerName(selectedPlayerId) ? 'Choose a different name, up to 80 characters.' : ''}
+                                    helperText={
+                                        selectedPlayerId && !isPlayerName(selectedPlayerId)
+                                            ? 'Choose a different name, up to 80 characters.'
+                                            : ''
+                                    }
                                     onChange={e => setSelectedPlayerId(e.target.value)}
                                 />
                             </FormControl>

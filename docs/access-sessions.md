@@ -1,6 +1,6 @@
 # Local host and paired devices
 
-Access-control contract for issue #4. LAN remains disabled in the desktop launcher until these boundaries have been verified.
+Access-control contract for issue #4. The desktop starts locally; the host can explicitly enable sharing on a private network.
 
 ## Usage and ownership
 
@@ -35,6 +35,6 @@ A grant is persisted before a claim is acknowledged. A failed write retains the 
 
 Backend integration tests cover anonymous and forged credentials, one-use and expired invitations, lost-response retry, host-only HTTP operations, cross-game and cross-faction commands, read-only spectators, secret objective filtering, revocation of open sockets, failed grant writes, restart persistence, code reuse after deletion, and a recoverable version-one migration. Browser tests cover issuing a player link, using it in an independent phone-sized browser, removing its fragment, and reloading with the device cookie. These are simulated browser clients, not physical Wi-Fi qualification.
 
-The desktop preview still binds to loopback. Its pairing links work in another browser on the same PC. LAN interface selection, QR codes, firewall guidance, and physical Windows/phone testing remain separate work. The standalone server can be bound explicitly with TIGHT_HOST and uses the same authorization boundary.
+The desktop retains its loopback listener while optional Wi-Fi sharing adds one selected private interface. Player invitations include QR codes, and the sharing dialog explains Private-network firewall access. See [Wi-Fi sharing](lan-hosting.md). Physical Windows/phone testing remains tracked in #26. The standalone server can be bound explicitly with TIGHT_HOST and uses the same authorization boundary.
 
 The host is trusted to administer every game, including its private objective data. Paired players receive their assigned factions' private objectives; other unscored descriptions are removed from snapshots and broadcasts. Scored objectives and ended games are public. Display names remain the game's labels and assignment keys; possession of a name never grants access.

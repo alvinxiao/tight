@@ -5,6 +5,8 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
+import { hostingSchema } from '../../src/common/hosting.js';
+import { PNG } from 'pngjs';
 
 const require = createRequire(import.meta.url);
 const root = path.resolve(import.meta.dirname, '../..');
@@ -115,6 +117,91 @@ test('desktop owns a loopback backend, isolates the renderer, saves games, and s
         expect(nextPid).not.toBe(backendPid);
         await recovered.getByRole('link', { name: `Resume ${id}`, exact: true }).click();
         await expect(recovered.getByRole('textbox', { name: 'Enter Name', exact: true })).toBeVisible();
+    } finally {
+        if (app) await quit(app);
+        await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+});
+
+test('desktop shares on a selected adapter, generates usable QR invitations, and keeps the host local', async ({}, testInfo) => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'tight sharing 测试-'));
+    let app: ElectronApplication | undefined;
+    try {
+        app = await launch(directory);
+        const page = await app.firstWindow();
+        await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
+        const localOrigin = new URL(page.url()).origin;
+        expect(await page.evaluate(() => Object.keys(window.tightDesktop || {}).sort())).toEqual([
+            'getHosting',
+            'setHosting',
+        ]);
+        const hosting = hostingSchema.parse(
+            await page.evaluate(async () => {
+                if (!window.tightDesktop) throw new Error('Missing desktop hosting bridge');
+                return window.tightDesktop.getHosting();
+            }),
+        );
+        expect(hosting.mode).toBe('local');
+        const adapter = hosting.interfaces[0];
+        test.skip(!adapter, 'No private IPv4 adapter in this execution environment');
+        await page.getByRole('button', { name: 'Wi-Fi sharing', exact: true }).click();
+        await page.getByRole('combobox', { name: 'Wi-Fi or Ethernet network', exact: true }).click();
+        await page.getByRole('option', { name: `${adapter.name} (${adapter.address})`, exact: true }).click();
+        await page.getByRole('button', { name: 'Start sharing on this network', exact: true }).click();
+        const address = `http://${adapter.address}:${hosting.port}`;
+        await expect(page.getByRole('textbox', { name: 'Lobby address', exact: true })).toHaveValue(address);
+        expect(new URL(page.url()).origin).toBe(localOrigin);
+        async function decode(label: string) {
+            const picture = PNG.sync.read(await page.getByRole('img', { name: label, exact: true }).screenshot());
+            const reader: unknown = require('jsqr');
+            if (typeof reader !== 'function') throw new Error('Missing QR decoder');
+            const decoded: unknown = reader(new Uint8ClampedArray(picture.data), picture.width, picture.height);
+            if (typeof decoded !== 'object' || !decoded || !('data' in decoded) || typeof decoded.data !== 'string')
+                throw new Error('Rendered QR code could not be decoded');
+            return decoded.data;
+        }
+        expect(await decode('Wi-Fi lobby QR code')).toBe(`${address}/`);
+        await page.screenshot({ path: testInfo.outputPath('sharing.png') });
+        await page.getByRole('button', { name: 'Close', exact: true }).click();
+        const created = await page.request.post(`${localOrigin}/api/game/create`, { data: { numPlayers: 1 } });
+        const id: unknown = await created.json();
+        if (typeof id !== 'string') throw new Error('Missing game code');
+        await page.goto(`${localOrigin}/${id}`);
+        await page.getByRole('textbox', { name: 'Enter Name', exact: true }).fill('Desktop host');
+        await page.getByRole('button', { name: 'Continue', exact: true }).click();
+        await page.getByRole('button', { name: 'Pair a device', exact: true }).click();
+        await page.getByRole('textbox', { name: 'Player name', exact: true }).fill('QR player');
+        await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
+        const invitation = await decode('Player invitation QR code');
+        expect(new URL(invitation).origin).toBe(address);
+        const hostCookie = (await page.context().cookies()).find(cookie => cookie.name === 'tight-session');
+        expect(hostCookie).toBeDefined();
+        expect(invitation).not.toContain(hostCookie?.value || 'missing-host-cookie');
+        const token = new URLSearchParams(new URL(invitation).hash.slice(1)).get('pair');
+        const claim = await fetch(`${address}/api/session/claim`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token }),
+        });
+        expect(claim.status).toBe(200);
+        expect((await claim.json()).playerId).toBe('QR player');
+        await page.getByRole('button', { name: 'Close', exact: true }).click();
+        await page.getByRole('button', { name: 'Wi-Fi sharing', exact: true }).click();
+        await page.getByRole('button', { name: 'Stop Wi-Fi sharing', exact: true }).click();
+        await expect(page.getByText('Local only. Other devices cannot connect yet.', { exact: true })).toBeVisible();
+        await expect(fetch(address, { signal: AbortSignal.timeout(1000) })).rejects.toThrow();
+        expect((await page.request.get(`${localOrigin}/api/game/export?gameId=${id}`)).ok()).toBe(true);
+        await page.getByRole('button', { name: 'Close', exact: true }).click();
+        await page.context().clearCookies();
+        const denied = await page.evaluate(async () => {
+            try {
+                await window.tightDesktop?.getHosting();
+                return false;
+            } catch {
+                return true;
+            }
+        });
+        expect(denied, 'the preload bridge must require the current host cookie').toBe(true);
     } finally {
         if (app) await quit(app);
         await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

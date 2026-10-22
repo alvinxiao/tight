@@ -1,3 +1,5 @@
+import { Hosting } from 'common/hosting.js';
+import { lanInterfaces } from './lanInterfaces.js';
 import { AccessSessions } from './accessSessions.js';
 import { sessionRouter, authorizeHttp } from './rest-api/session.js';
 import express, { NextFunction, Request, Response } from 'express';
@@ -96,17 +98,34 @@ export async function startBackend(options: BackendOptions) {
         }
 
         const sockets = initializeWebSocketServer(server, request => verifyRequest(request), sessions);
+        let lan: { address: string; server: HttpServer | HttpsServer } | null = null;
+        let stopping = false;
+        let changes = Promise.resolve();
+        const closeListener = (listener: HttpServer | HttpsServer) =>
+            new Promise<void>((resolve, reject) => {
+                if (!listener.listening) {
+                    resolve();
+                    return;
+                }
+                listener.close(error => (error ? reject(error) : resolve()));
+                listener.closeAllConnections();
+            });
         let stopPromise: Promise<void> | undefined;
-        const stop = () =>
-            (stopPromise ??= (async () => {
+        const stop = () => {
+            stopping = true;
+            return (stopPromise ??= (async () => {
+                await changes;
+                if (lan) {
+                    sockets.detach(lan.server);
+                    await closeListener(lan.server);
+                    lan = null;
+                }
                 await sockets.stop();
-                await new Promise<void>((resolve, reject) => {
-                    server.close(error => (error ? reject(error) : resolve()));
-                    server.closeAllConnections();
-                });
+                await closeListener(server);
                 setDirty(false);
                 closeGameStorage();
             })());
+        };
         try {
             await new Promise<void>((resolve, reject) => {
                 server.once('error', reject);
@@ -121,7 +140,61 @@ export async function startBackend(options: BackendOptions) {
         }
         const address = server.address();
         if (!address || typeof address === 'string') throw new Error('Expected TCP server address');
-        verifyRequest = createNetworkPolicy({ hostnames, protocol, port: address.port });
+        const refreshPolicy = () => {
+            verifyRequest = createNetworkPolicy({
+                hostnames: [...hostnames, ...(lan ? [lan.address] : [])],
+                protocol,
+                port: address.port,
+            });
+        };
+        refreshPolicy();
+        const getHosting = (): Hosting => {
+            const base = { port: address.port, interfaces: lanInterfaces() };
+            return lan ? { ...base, mode: 'lan', address: lan.address } : { ...base, mode: 'local' };
+        };
+        const setLanHost = (selected: string | null): Promise<Hosting> => {
+            const operation = changes.then(async () => {
+                if (stopping) throw new Error('The host is stopping.');
+                if (options.host !== '127.0.0.1')
+                    throw new Error('Managed Wi-Fi sharing requires the desktop loopback listener.');
+                if (selected !== null && !lanInterfaces().some(adapter => adapter.address === selected))
+                    throw new Error('That private network is no longer available. Refresh the network list.');
+                if ((lan?.address || null) === selected) return getHosting();
+                let replacement: typeof lan = null;
+                if (selected !== null) {
+                    const listener = key && cert ? https.createServer({ key, cert }, app) : http.createServer(app);
+                    sockets.attach(listener);
+                    try {
+                        await new Promise<void>((resolve, reject) => {
+                            listener.once('error', reject);
+                            listener.listen(address.port, selected, () => {
+                                listener.off('error', reject);
+                                resolve();
+                            });
+                        });
+                        listener.on('error', error => console.error('Wi-Fi listener failed', error));
+                        replacement = { address: selected, server: listener };
+                    } catch (error) {
+                        sockets.detach(listener);
+                        await closeListener(listener);
+                        throw error;
+                    }
+                }
+                const previous = lan;
+                lan = replacement;
+                refreshPolicy();
+                if (previous) {
+                    sockets.detach(previous.server);
+                    await closeListener(previous.server);
+                }
+                return getHosting();
+            });
+            changes = operation.then(
+                () => {},
+                () => {},
+            );
+            return operation;
+        };
         const originHost =
             options.host && options.host !== '0.0.0.0' && options.host !== '::' ? options.host : '127.0.0.1';
         const authority = originHost.includes(':') ? `[${originHost}]` : originHost;
@@ -129,6 +202,8 @@ export async function startBackend(options: BackendOptions) {
             origin: `${protocol}://${authority}:${address.port}`,
             port: address.port,
             stop,
+            getHosting,
+            setLanHost,
             hostToken: sessions.hostToken,
             hostClaimToken: sessions.hostClaimToken,
         };

@@ -2,7 +2,7 @@
 
 A user installs TIGHT, opens it from Start Menu, selects Host game, and scans the displayed QR code with a phone. The phone opens its normal browser. The PC stores the game and continues hosting until the user ends the session. Resume game restores a saved game after restarting the PC.
 
-The first Electron launcher and portable Windows packaging are implemented. See [the desktop preview](windows-desktop.md) for the implemented flow and its validation limits. LAN controls, an installer, signing, and the remaining release work below are still planned.
+The first Electron launcher and portable Windows packaging are implemented. See [the desktop preview](windows-desktop.md) for the implemented flow and its validation limits. Private-network selection and QR invitations are also implemented; see [Wi-Fi sharing](lan-hosting.md). An installer, signing, and the remaining release work below are still planned.
 
 ## What exists today
 
@@ -79,7 +79,7 @@ Session identity is an opaque credential, separate from a player's display name.
 2. Main locates the per-user data directory and starts the bundled backend. The backend opens storage, runs safe migrations, and binds an available nonprivileged port.
 3. Backend reports readiness and its exact origin. Main then loads the local UI with a secure BrowserWindow configuration. No production watcher or inspector starts.
 4. A new installation opens a local-only home screen with Host game and Resume game. It explains that phones need the same Wi-Fi and the PC must stay on.
-5. Host on Wi-Fi explicitly enables LAN access on the selected usable interface. Show the Windows Private-network firewall prompt/guidance when needed. Handle a bind-mode transition by resynchronizing the local client; never quietly expose the host during startup.
+5. Host on Wi-Fi explicitly enables LAN access on the selected usable interface. Show the Windows Private-network firewall prompt/guidance when needed. The additional listener preserves the local client connection; startup never quietly exposes the host.
 6. The lobby displays a join URL containing the LAN address, actual port, and game location, plus a QR code and short code. Use a separate one-time pairing flow if capabilities are conveyed through the link. Do not embed a reusable host-admin credential in the QR code.
 7. Phones load the same web UI and connect to the same backend origin. Server validates their session and allowed actions.
 8. Accepted changes commit to SQLite before acknowledgment. The UI shows saved status. Guests can resume after a transient disconnect using their device session and a fresh snapshot.

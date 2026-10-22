@@ -23,6 +23,7 @@ import { ActionType } from '../reducer';
 import { AppTheme } from '../types';
 
 import Drawer from './Drawer';
+import SharingButton from './SharingButton';
 import TextWithTooltip from './TextWithTooltip';
 
 function Header() {
@@ -86,12 +87,13 @@ function Header() {
                             </IconButton>
                         </Tooltip>
                         <TextWithTooltip
-                            text={isHome ? '' : playerId ?? ''}
+                            text={isHome ? '' : (playerId ?? '')}
                             width={connectError ? '25%' : '75%'}
                             variant="h6"
                         />
                     </Grid>
                     {connectionStatus}
+                    <SharingButton />
                     <Tooltip title={theme === 'light' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}>
                         <IconButton onClick={() => onThemeChange(theme === 'dark' ? 'light' : 'dark')} size="large">
                             {theme === 'dark' ? <Brightness6Outlined /> : <Brightness6 />}
@@ -99,10 +101,16 @@ function Header() {
                     </Tooltip>
                 </Toolbar>
             </AppBar>
-            {session.role === 'player' && <Typography variant="body2" sx={{ px: 2, py: 1 }}>
-                Playing as {session.playerId}. The host controls setup and game phases.
-            </Typography>}
-            {session.role === 'spectator' && <Typography variant="body2" sx={{ px: 2, py: 1 }}>Spectator, read only.</Typography>}
+            {session.role === 'player' && (
+                <Typography variant="body2" sx={{ px: 2, py: 1 }}>
+                    Playing as {session.playerId}. The host controls setup and game phases.
+                </Typography>
+            )}
+            {session.role === 'spectator' && (
+                <Typography variant="body2" sx={{ px: 2, py: 1 }}>
+                    Spectator, read only.
+                </Typography>
+            )}
             <Drawer open={drawerOpen} onOpen={() => setDrawerOpen(true)} onClose={() => setDrawerOpen(false)} />
         </>
     );

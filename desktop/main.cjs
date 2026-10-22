@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, session, utilityProcess } = require('electron');
+const { app, BrowserWindow, dialog, session, utilityProcess, ipcMain } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 
@@ -16,7 +16,56 @@ let quitting = false;
 let recovering = false;
 let quitPrompt = false;
 let activeOrigin;
+let activeHostToken;
+let hostingRequestId = 0;
+const hostingRequests = new Map();
 const expectedExits = new WeakSet();
+
+function requestHosting(address, change) {
+    const current = child;
+    if (!current || quitting) return Promise.reject(new Error('The game server is not running.'));
+    return new Promise((resolve, reject) => {
+        const id = ++hostingRequestId;
+        const timer = setTimeout(() => {
+            hostingRequests.delete(id);
+            reject(new Error('The host did not respond. Refresh the network list.'));
+        }, 10000);
+        hostingRequests.set(id, { child: current, resolve, reject, timer });
+        try {
+            current.postMessage({ type: 'hosting', id, change, address });
+        } catch (error) {
+            clearTimeout(timer);
+            hostingRequests.delete(id);
+            reject(error);
+        }
+    });
+}
+function hostingReply(current, message) {
+    if (!message || message.type !== 'hosting' || !Number.isSafeInteger(message.id)) return;
+    const pending = hostingRequests.get(message.id);
+    if (!pending || pending.child !== current) return;
+    clearTimeout(pending.timer);
+    hostingRequests.delete(message.id);
+    if (typeof message.error === 'string') pending.reject(new Error(message.error));
+    else {
+        if (window && !window.isDestroyed())
+            window.setTitle(message.value?.mode === 'lan' ? 'TIGHT (Wi-Fi sharing)' : 'TIGHT (local only)');
+        pending.resolve(message.value);
+    }
+}
+async function verifyHostFrame(event) {
+    if (
+        !window ||
+        event.sender !== window.webContents ||
+        event.senderFrame !== window.webContents.mainFrame ||
+        !activeOrigin ||
+        new URL(event.senderFrame.url).origin !== activeOrigin
+    )
+        throw new Error('Hosting controls are available only in the host window.');
+    const cookies = await session.defaultSession.cookies.get({ url: activeOrigin, name: 'tight-session' });
+    if (!activeHostToken || !cookies.some(cookie => cookie.value === activeHostToken))
+        throw new Error('Hosting controls require the host session.');
+}
 
 function isReady(message) {
     if (!message || message.type !== 'ready' || message.protocolVersion !== 2 || typeof message.origin !== 'string')
@@ -24,7 +73,8 @@ function isReady(message) {
     try {
         const url = new URL(message.origin);
         return (
-            typeof message.hostToken === 'string' && /^[A-Za-z0-9_-]{43}$/.test(message.hostToken) &&
+            typeof message.hostToken === 'string' &&
+            /^[A-Za-z0-9_-]{43}$/.test(message.hostToken) &&
             url.protocol === 'http:' &&
             url.hostname === '127.0.0.1' &&
             Number(url.port) > 1024 &&
@@ -61,6 +111,7 @@ async function stopBackend() {
 }
 
 function startBackend() {
+    activeHostToken = undefined;
     return new Promise((resolve, reject) => {
         const env = { ...process.env, TIGHT_USE_HTTP: 'true' };
         delete env.NODE_OPTIONS;
@@ -80,7 +131,10 @@ function startBackend() {
             reject(new Error('The game server did not start in time.'));
         }, 20000);
         current.on('message', message => {
-            if (ready) return;
+            if (ready) {
+                hostingReply(current, message);
+                return;
+            }
             if (!isReady(message)) {
                 current.kill();
                 reject(new Error('The game server returned invalid startup information.'));
@@ -92,6 +146,12 @@ function startBackend() {
         });
         current.once('exit', () => {
             clearTimeout(timeout);
+            for (const [id, pending] of hostingRequests)
+                if (pending.child === current) {
+                    clearTimeout(pending.timer);
+                    pending.reject(new Error('The game server stopped.'));
+                    hostingRequests.delete(id);
+                }
             if (child === current) child = undefined;
             if (!ready)
                 reject(
@@ -137,6 +197,7 @@ function configureWindow(origin) {
         title: 'TIGHT (local only)',
         show: false,
         webPreferences: {
+            preload: path.join(__dirname, 'preload.cjs'),
             nodeIntegration: false,
             contextIsolation: true,
             sandbox: true,
@@ -173,7 +234,15 @@ async function launch() {
     try {
         await stopBackend();
         const { origin, hostToken } = await startBackend();
-        await session.defaultSession.cookies.set({ url: origin, name: 'tight-session', value: hostToken, httpOnly: true, sameSite: 'strict', secure: false });
+        activeHostToken = hostToken;
+        await session.defaultSession.cookies.set({
+            url: origin,
+            name: 'tight-session',
+            value: hostToken,
+            httpOnly: true,
+            sameSite: 'strict',
+            secure: false,
+        });
         await configureWindow(origin);
     } catch (error) {
         void recover(error instanceof Error ? error.message : 'Could not start TIGHT.');
@@ -219,6 +288,16 @@ else {
         }
     });
     app.whenReady().then(() => {
+        ipcMain.handle('tight:hosting', async event => {
+            await verifyHostFrame(event);
+            return requestHosting(null, false);
+        });
+        ipcMain.handle('tight:set-hosting', async (event, address) => {
+            await verifyHostFrame(event);
+            if (address !== null && (typeof address !== 'string' || address.length > 64))
+                throw new Error('Invalid network selection.');
+            return requestHosting(address, true);
+        });
         session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
         session.defaultSession.setPermissionCheckHandler(() => false);
         session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
