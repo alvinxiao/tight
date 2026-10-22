@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { after, before, test } from 'node:test';
+import { afterEach, beforeEach, test } from 'node:test';
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { once } from 'node:events';
@@ -17,9 +17,12 @@ const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.Modu
 const { MessageType: T } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 let server, origin, logs = '';
 const sockets = new Set();
-const dataDir = await mkdtemp(path.join(tmpdir(), 'tight-server-'));
+let dataDir;
 
-before(async () => {
+beforeEach(async () => {
+    logs = '';
+    cookie = '';
+    dataDir = await mkdtemp(path.join(tmpdir(), 'tight-server-'));
     server = spawn(process.execPath, ['build/server.js'], {
         cwd: root, env: { ...process.env, TIGHT_USE_HTTP: 'true', PORT: '0', TIGHT_DATA_DIR: dataDir }, stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -36,8 +39,9 @@ before(async () => {
     cookie = await claimHost(origin, logs);
 });
 
-after(async () => {
+afterEach(async () => {
     for (const ws of sockets) ws.terminate();
+    sockets.clear();
     if (server && server.exitCode === null) { const stopped = once(server, 'exit'); server.kill('SIGTERM'); await stopped; }
     await rm(dataDir, { recursive: true, force: true });
 });
@@ -71,7 +75,14 @@ async function connect(id, playerId) {
     return { ws, game: initial.data.game, playerId: initial.data.playerId };
 }
 
-async function snapshot(id) { const { ws, game } = await connect(id); ws.close(); return game; }
+async function snapshot(id, existing) {
+    if (existing) {
+        const result = waitMessage(existing, msg => msg.type === T.BROADCAST_CHANGE && msg.data?.game?.created);
+        existing.send(JSON.stringify({ type: T.GAME_LOAD, data: { gameId: id } }));
+        return (await result).data.game.created;
+    }
+    const { ws, game } = await connect(id); ws.close(); return game;
+}
 async function command(ws, type, data) {
     const changed = waitMessage(ws, msg => msg.type === T.BROADCAST_CHANGE);
     ws.send(JSON.stringify({ type, data }));
@@ -225,7 +236,7 @@ test('invalid commands cannot crash the host, overwrite state, or reference miss
     const { id, ws } = await gameTest(t, { numPlayers: 2, publicObjectives: [{ id: 1, description: '', vp: 1 }] });
     await command(ws, T.GAME_UPDATE_FACTION, { gameId: id, order: 0, name: 'The Arborec' });
     await command(ws, T.GAME_UPDATE_FACTION, { gameId: id, order: 1, name: 'The Emirates of Hacan' });
-    const before = await snapshot(id);
+    const before = await snapshot(id, ws);
     const planet = { factionName: 'The Arborec', planetId: 'Mecatol Rex' };
     for (const [type, fields] of [
         [T.GAME_UPDATE_FACTION, { order: -1 }], [T.GAME_UPDATE_FACTION, { order: 2 }],
@@ -254,10 +265,10 @@ test('invalid commands cannot crash the host, overwrite state, or reference miss
         const [code] = await closed;
         assert.equal(code, 1008, `Command ${T[type]} ${JSON.stringify(fields)}`);
         assert.equal(server.exitCode, null);
-        assert.deepEqual(await snapshot(id), before);
+        assert.deepEqual(await snapshot(id, ws), before);
     }
     await command(ws, T.GAME_NEXT_ROUND, { gameId: id });
-    assert.equal((await snapshot(id)).status.round, 2);
+    assert.equal((await snapshot(id, ws)).status.round, 2);
 });
 
 test('sparse scored-objective arrays normalize safely and nested valid updates still work', async t => {

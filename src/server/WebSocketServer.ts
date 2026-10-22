@@ -1,3 +1,4 @@
+import { peerAddress, RateLimit } from './trafficLimits.js';
 import { IncomingMessage, type Server as HttpServer } from 'http';
 import { Duplex } from 'node:stream';
 import { type Server as HttpsServer } from 'https';
@@ -27,9 +28,10 @@ interface OnConnectionParam {
     ws: WebSocket;
     request: IncomingMessage;
     sessions: AccessSessions;
+    commands: RateLimit;
 }
 
-function onConnection({ wss, ws, request, sessions }: OnConnectionParam) {
+function onConnection({ wss, ws, request, sessions, commands }: OnConnectionParam) {
     ws.on('error', () => log('Web socket connection error'));
     let query: URLSearchParams;
     try {
@@ -66,7 +68,13 @@ function onConnection({ wss, ws, request, sessions }: OnConnectionParam) {
     log(`Opening web socket connection: ${idMsg}`);
 
     ws.on('pong', () => (ws.isAlive = true));
+    const peer = peerAddress(request);
     ws.on('message', (raw, isBinary) => {
+        if (ws.readyState !== WebSocketType.OPEN) return;
+        if (commands.consume(peer)) {
+            ws.close(1008, 'Too many commands. Wait a moment before reconnecting.');
+            return;
+        }
         if (isBinary) {
             ws.close(1003, 'Text commands required');
             return;
@@ -133,6 +141,9 @@ export default function initialize(
     verifyRequest: VerifyNetworkRequest,
     sessions: AccessSessions,
 ) {
+    const commands = new RateLimit(60, 10, 256);
+    const handshakes = new RateLimit(40, 2, 256);
+    const addresses = new WeakMap<WebSocketType, string>();
     const wss = new WSServer({
         noServer: true,
         maxPayload: 64 * 1024,
@@ -140,6 +151,18 @@ export default function initialize(
             const rejection = verifyRequest(info.req);
             if (rejection) done(false, rejection.status, rejection.message);
             else {
+                const peer = peerAddress(info.req);
+                const wait = handshakes.consume(peer);
+                if (wait) {
+                    done(false, 429, 'Too many connection attempts', { 'Retry-After': String(wait) });
+                    return;
+                }
+                let peerConnections = 0;
+                for (const client of wss.clients) if (addresses.get(client) === peer) peerConnections += 1;
+                if (wss.clients.size >= 64 || peerConnections >= 16) {
+                    done(false, 503, 'Too many open connections', { 'Retry-After': '5' });
+                    return;
+                }
                 try {
                     if (sessions.resolve(sessions.token(info.req)).role === 'unpaired')
                         done(false, 401, 'Pair this device with the host first');
@@ -161,6 +184,7 @@ export default function initialize(
         const upgrade = (request: IncomingMessage, socket: Duplex, head: Buffer) => {
             wss.handleUpgrade(request, socket, head, ws => {
                 owners.set(ws, listener);
+                addresses.set(ws, peerAddress(request));
                 wss.emit('connection', ws, request);
             });
         };
@@ -177,7 +201,7 @@ export default function initialize(
     wss.on('error', () => log('WebSocket server error'));
     wss.on('connection', (ws: WebSocket, request: IncomingMessage) => {
         try {
-            onConnection({ wss, ws, request, sessions });
+            onConnection({ wss, ws, request, sessions, commands });
         } catch (error) {
             console.error('Could not initialize device connection', error);
             ws.close(1011, 'Could not initialize connection');
