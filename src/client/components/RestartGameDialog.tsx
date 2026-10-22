@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import CloseIcon from '@mui/icons-material/Close';
 import {
@@ -57,8 +56,6 @@ export default function RestartGameDialog(props: RestartGameDialogProps) {
         publicObjectives,
     });
 
-    const navigate = useNavigate();
-
     if (!game) {
         return null;
     }
@@ -68,8 +65,7 @@ export default function RestartGameDialog(props: RestartGameDialogProps) {
         onClose?.();
     };
 
-    const onRestart = () => run(signal => api.gameRestart({ id: game.id, ...gameOptions }, { signal }), gameCode => {
-        if (gameCode) navigate(`/${gameCode}`);
+    const onRestart = () => run(signal => api.gameRestart({ id: game.id, ...gameOptions }, { signal }), () => {
         onClose();
     });
 
