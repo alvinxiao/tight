@@ -1,3 +1,4 @@
+export { GameStore } from './database/GameStore.js';
 import { requestLimiter } from './trafficLimits.js';
 import { Hosting } from 'common/hosting.js';
 import { lanInterfaces } from './lanInterfaces.js';
