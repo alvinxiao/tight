@@ -5,10 +5,10 @@ import { WebSocketServer as WSServer, WebSocket as WebSocketType } from 'ws';
 import { MessageType, PartialData } from 'common/message.js';
 import uuidv4 from 'common/uuidv4.js';
 
-import { getGame, getGameForClient } from './database/game.js';
+import { getGame, getGameForClient, mutateGame } from './database/game.js';
 
 import { WebSocket, WebSocketServer, broadcastChangeData, getWebSocketLogId, sendData } from './WebSocket.js';
-import { getDirtyGameData, isDirty, removeOldGames, setDirty } from './dirty.js';
+import { dirty, getDirtyGameData, isDirty, setDirty } from './dirty.js';
 import handleMessage from './handleMessage.js';
 import parseClientMessage from './parseClientMessage.js';
 import { connectionQuerySchema } from './commandSchemas.js';
@@ -17,7 +17,6 @@ import log from './log.js';
 
 const KEEP_ALIVE_INTERVAL = 10000; // ms
 const BROADCAST_INTERVAL = 300; // ms
-const REMOVE_GAME_INTERVAL = 1000 * 60 * 60; // 1 hour
 
 interface OnConnectionParam {
     wss: WebSocketServer;
@@ -72,7 +71,18 @@ function onConnection({ wss, ws, request }: OnConnectionParam) {
             ws.close(1008, error);
             return;
         }
-        handleMessage({ wss, ws, message: result.message });
+        const id = result.message.data.gameId;
+        const previousDirty = structuredClone(dirty.games[id]);
+        const previousBinding = { gameId: ws.gameId, playerId: ws.playerId };
+        try {
+            mutateGame(id, () => handleMessage({ wss, ws, message: result.message }));
+        } catch (error) {
+            if (previousDirty) dirty.games[id] = previousDirty;
+            else delete dirty.games[id];
+            Object.assign(ws, previousBinding);
+            console.error('Could not commit game command', error);
+            ws.close(1011, 'Could not save game. Reconnect and try again.');
+        }
     });
     ws.on('close', () => log(`Closing web socket connection: ${idMsg}`));
 
@@ -119,9 +129,6 @@ export default function initialize(server: HttpServer | HttpsServer) {
             ws.ping(null, false);
         });
     }, KEEP_ALIVE_INTERVAL);
-
-    // Interval to remove games that haven't had activity in a while.
-    setInterval(removeOldGames, REMOVE_GAME_INTERVAL);
 
     // Broadcast changes on an interval
     setInterval(() => {

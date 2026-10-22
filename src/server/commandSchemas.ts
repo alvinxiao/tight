@@ -1,71 +1,23 @@
 import { z } from 'zod';
 
 import { Phase, StrategyCardIndex, Version } from 'common/Game.js';
-import { Traits } from 'common/Planet.js';
-import { GAME_CODE_PATTERN } from 'common/gameCode.js';
-import { isPlayerName } from 'common/playerName.js';
 import { MessageType } from 'common/message.js';
-import { FactionColor } from 'common/colors.js';
-import { listFactionNames } from './database/faction/index.js';
-import { listPlanetNames } from './database/planet/index.js';
 
-const factionNames = new Set(listFactionNames());
-const planetNames = new Set(listPlanetNames());
-export const gameIdSchema = z.string().regex(GAME_CODE_PATTERN);
-const playerId = z.string().refine(isPlayerName, 'Invalid player name');
-const factionName = z.string().refine(value => factionNames.has(value), 'Unknown faction');
-const color = z
-    .string()
-    .refine(
-        value => value === 'None' || Object.values(FactionColor).some(candidate => candidate === value),
-        'Unknown color',
-    );
-const planetId = z.string().refine(value => planetNames.has(value), 'Unknown planet');
-const planetIds = z.union([planetId, z.array(planetId).max(planetNames.size)]);
-const playerIds = z
-    .array(playerId)
-    .max(32)
-    .refine(values => new Set(values).size === values.length);
-const index = z.number().int().min(0).max(7);
-const objective = z
-    .object({
-        id: z.number().int(),
-        description: z.string().max(1024),
-        vp: z.number().int().min(1).max(10),
-    })
-    .strict();
-const publicObjective = objective.extend({ id: z.number().int().min(1).max(100) });
-const publicObjectives = z
-    .array(publicObjective)
-    .max(50)
-    .refine(values => new Set(values.map(value => value.id)).size === values.length, 'Duplicate objective IDs');
-const secretObjectives = z
-    .array(
-        z
-            .object({
-                cleared: z.boolean(),
-                objective: objective.extend({ id: z.number().int().min(-3).max(-1) }),
-            })
-            .strict(),
-    )
-    .length(3)
-    .refine(
-        values => values.every((value, position) => value.objective.id === -position - 1),
-        'Invalid secret objective order',
-    );
-const modifier = z.number().finite().int().min(-100).max(100).optional();
-const modifiers = z
-    .object({
-        resources: modifier,
-        influence: modifier,
-        biotic: modifier,
-        warfare: modifier,
-        propulsion: modifier,
-        cybernetic: modifier,
-        trait: z.array(z.nativeEnum(Traits)).max(3).optional(),
-        DMZ: z.boolean().optional(),
-    })
-    .strict();
+import {
+    factionNames,
+    gameIdSchema,
+    playerId,
+    factionName,
+    color,
+    planetId,
+    planetIds,
+    playerIds,
+    index,
+    publicObjectives,
+    secretObjectives,
+    modifiers,
+} from './gameSchemas.js';
+export { gameIdSchema } from './gameSchemas.js';
 const base = z.object({ gameId: gameIdSchema }).strict();
 const faction = base.extend({ factionName });
 const planet = faction.extend({ planetId: planetIds });

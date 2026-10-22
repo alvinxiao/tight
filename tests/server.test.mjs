@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { spawn } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { once } from 'node:events';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import WebSocket from 'ws';
 import ts from 'typescript';
 
@@ -12,10 +14,11 @@ const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.Modu
 const { MessageType: T } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 let server, origin, logs = '';
 const sockets = new Set();
+const dataDir = await mkdtemp(path.join(tmpdir(), 'tight-server-'));
 
 before(async () => {
     server = spawn(process.execPath, ['build/server.js'], {
-        cwd: root, env: { ...process.env, TIGHT_USE_HTTP: 'true', PORT: '0' }, stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: root, env: { ...process.env, TIGHT_USE_HTTP: 'true', PORT: '0', TIGHT_DATA_DIR: dataDir }, stdio: ['ignore', 'pipe', 'pipe'],
     });
     server.stderr.on('data', b => logs += b);
     await new Promise((resolve, reject) => {
@@ -32,6 +35,7 @@ before(async () => {
 after(async () => {
     for (const ws of sockets) ws.terminate();
     if (server && server.exitCode === null) { const stopped = once(server, 'exit'); server.kill('SIGTERM'); await stopped; }
+    await rm(dataDir, { recursive: true, force: true });
 });
 
 async function request(path, body) {

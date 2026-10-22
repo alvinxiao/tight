@@ -1,4 +1,10 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { defineConfig } from '@playwright/test';
+
+const dataDir = mkdtempSync(path.join(tmpdir(), 'tight-browser-'));
+process.on('exit', () => rmSync(dataDir, { recursive: true, force: true }));
 
 export default defineConfig({
     testDir: './tests/browser',
@@ -17,7 +23,7 @@ export default defineConfig({
     webServer: {
         command: 'node build/server.js',
         url: 'http://127.0.0.1:18743',
-        env: { TIGHT_USE_HTTP: 'true', PORT: '18743' },
+        env: { TIGHT_USE_HTTP: 'true', PORT: '18743', TIGHT_DATA_DIR: dataDir },
         reuseExistingServer: false,
         timeout: 15000,
     },
