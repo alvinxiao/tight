@@ -189,6 +189,8 @@ test('failed startup consumption blocks manual sharing and cannot falsely confir
     await assert.rejects(controller.change(null), { code: 'EACCES' });
     assert.deepEqual(backend.calls, [{ address: null, change: true }], 'Stop still closes the listener before reporting the preference failure');
     denied = false;
+    assert.equal(await controller.restore(), 'failed', 'backend recovery must not retry an old blocked approval automatically');
+    assert.deepEqual(backend.calls, [{ address: null, change: true }]);
     assert.equal((await controller.change(null)).mode, 'local');
     assert.equal(await controller.prepareQuit(), true);
     const reopened = host();

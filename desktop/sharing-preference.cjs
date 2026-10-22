@@ -47,7 +47,7 @@ function writeSharingPreference(filename, adapter, files = fs) {
 
 function createSharingPreferences(filename, requestHosting, files = fs) {
     let approved = null;
-    let initialized = false;
+    let initialization = 'new';
     let restorationError = null;
     let changes = Promise.resolve();
     let quitPromise;
@@ -60,15 +60,17 @@ function createSharingPreferences(filename, requestHosting, files = fs) {
         restore() {
             return enqueue(async () => {
                 if (quitPromise) return 'failed';
-                if (!initialized) {
+                if (initialization === 'blocked') return restorationError;
+                if (initialization === 'new') {
                     const saved = readSharingPreference(filename, files);
                     try {
                         forgetSharingPreference(filename, files);
                     } catch {
+                        initialization = 'blocked';
                         restorationError = 'failed';
                         return restorationError;
                     }
-                    initialized = true;
+                    initialization = 'ready';
                     if (saved.kind === 'invalid') restorationError = 'unavailable';
                     if (saved.kind === 'selected') approved = saved.adapter;
                 }
@@ -99,16 +101,16 @@ function createSharingPreferences(filename, requestHosting, files = fs) {
                 if (address === null) {
                     approved = null;
                     const current = await requestHosting(null, true);
-                    if (!initialized) {
+                    if (initialization !== 'ready') {
                         forgetSharingPreference(filename, files);
-                        initialized = true;
+                        initialization = 'ready';
                     }
                     restorationError = null;
                     return current;
                 }
-                if (!initialized) {
+                if (initialization !== 'ready') {
                     forgetSharingPreference(filename, files);
-                    initialized = true;
+                    initialization = 'ready';
                 }
                 const current = await requestHosting(null, false);
                 const adapter = current.interfaces.find(value => value.address === address);
