@@ -157,6 +157,7 @@ export default function PairDeviceDialog({
                             value={link}
                             size={192}
                             marginSize={4}
+                            style={{ alignSelf: 'center', maxWidth: '100%', height: 'auto' }}
                         />
                     )}
                     {networkMissing && (

@@ -1,7 +1,5 @@
-import React, { MouseEvent, useEffect, useState } from 'react';
+import React, { MouseEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-import { isEqual } from 'lodash-es';
 
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
@@ -24,7 +22,7 @@ import {
 } from '@mui/material';
 import { makeStyles } from '@mui/styles';
 
-import { Game, GameClientData, GameStatus, getFactionTurn, Phase, StrategyCardIndex } from 'common/Game';
+import { Game, GameClientData, getFactionTurn, Phase, StrategyCardIndex } from 'common/Game';
 import { MessageType } from 'common/message';
 
 import GameInfoToolbar from '../components/GameInfoToolbar';
@@ -128,37 +126,15 @@ const useStyles = makeStyles(theme => ({
 function Game() {
     const theme = useTheme();
     const classes = useStyles();
-    const { sendData } = useAppContext();
+    const {
+        sendData,
+        state: { pendingCommands },
+    } = useAppContext();
     const { gameId, game, playerId, isHost } = useGameInfo();
     const navigate = useNavigate();
 
-    const [statusState, setStatusState] = useState<GameStatus>({
-        started: true,
-        ended: false,
-        round: 1,
-        phase: Phase.STRATEGY,
-        turn: StrategyCardIndex.NONE,
-        speaker: '',
-        pickOrder: [],
-        pickTurn: 0,
-        custodiansRemoved: false,
-        agenda1Voted: false,
-        agenda2Voted: false,
-    });
-    const [pending, setPending] = useState(false);
+    const pending = pendingCommands > 0;
     const [actionExpanded, setActionExpaned] = useState(false);
-
-    useEffect(() => {
-        const { status } = game || {};
-        if (!status) {
-            return;
-        }
-
-        if (!isEqual(status, statusState)) {
-            setStatusState({ ...status });
-            setPending(false);
-        }
-    });
 
     if (!playerId && game && isHost) {
         const onClose = (canceled: boolean) => {
@@ -181,7 +157,7 @@ function Game() {
 
     const isSpectator = !isHost;
 
-    const { round, phase } = statusState;
+    const { round, phase } = status;
     const canBack = round > 1 || (round === 1 && phase > Phase.STRATEGY);
     const { canNext, message } = canNextPhase(game);
 
@@ -197,7 +173,6 @@ function Game() {
         const newPhase = next ? nextPhase : prevPhase;
 
         sendData({ type: MessageType.GAME_STATUS_SET, data: { gameId, phase: newPhase } });
-        setPending(true);
     };
 
     const onStartNextRound = (e: MouseEvent<HTMLButtonElement>) => {
@@ -207,7 +182,6 @@ function Game() {
         }
 
         sendData({ type: MessageType.GAME_NEXT_ROUND, data: { gameId } });
-        setPending(true);
     };
 
     const onEndGame = (e: MouseEvent<HTMLButtonElement>) => {
@@ -217,7 +191,6 @@ function Game() {
         }
 
         sendData({ type: MessageType.END_GAME, data: { gameId } });
-        setPending(true);
     };
 
     let phaseStatus = null;

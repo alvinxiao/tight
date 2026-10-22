@@ -4,6 +4,7 @@ import { GameChangeDataMap, GameChangeData } from 'common/Game.js';
 import { ChangeData, MessageType } from 'common/message.js';
 
 import { logWS } from './log.js';
+import { getGameVersion } from './database/game.js';
 
 export interface WebSocketServer extends WSServer {}
 
@@ -58,7 +59,7 @@ export function broadcastChangeData({ wss, dirtyGames, error, serialize }: Broad
         if (game && ws.readyState === WS.OPEN) {
             const serialized = serialize(ws, game);
             if (!serialized) return;
-            const data: ChangeData = { game: serialized };
+            const data: ChangeData = { game: serialized, gameVersion: getGameVersion(game.id) };
             sendData({ ws, type: MessageType.BROADCAST_CHANGE, data, error });
         }
     });

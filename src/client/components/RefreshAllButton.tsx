@@ -8,7 +8,10 @@ import { useAppContext } from '../Context';
 import useGameInfo from '../hooks/useGameInfo';
 
 export default function RefreshAllbutton() {
-    const { sendData } = useAppContext();
+    const {
+        sendData,
+        state: { pendingCommands },
+    } = useAppContext();
     const { game, gameId, playerId, isHost } = useGameInfo();
 
     if (!game || !isHost) {
@@ -18,6 +21,7 @@ export default function RefreshAllbutton() {
     const onRefreshAll = () => {
         game.factions.forEach(f => {
             const { name: factionName, planets } = f;
+            if (!planets.length) return;
             sendData({
                 type: MessageType.REFRESH_PLANET,
                 data: { gameId, factionName, planetId: planets, ability: true },
@@ -27,7 +31,13 @@ export default function RefreshAllbutton() {
 
     return (
         <Toolbar>
-            <Button color="primary" variant="contained" fullWidth onClick={() => onRefreshAll()}>
+            <Button
+                disabled={pendingCommands > 0}
+                color="primary"
+                variant="contained"
+                fullWidth
+                onClick={() => onRefreshAll()}
+            >
                 <Typography>Refresh Everyone's Planets</Typography>
             </Button>
         </Toolbar>

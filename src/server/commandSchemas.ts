@@ -1,3 +1,4 @@
+import { gameVersionSchema } from 'common/gameVersion.js';
 import { z } from 'zod';
 
 import { Phase, StrategyCardIndex, Version } from 'common/Game.js';
@@ -90,10 +91,6 @@ function command<Type extends MessageType, Data extends z.AnyZodObject>(type: Ty
 }
 
 export const clientCommandSchema = z.discriminatedUnion('type', [
-    command(
-        MessageType.GAME_LOAD,
-        base.extend({ playerId: playerId.nullable().optional(), factionName: factionName.optional() }),
-    ),
     command(MessageType.GAME_ADD_PLAYER, base.extend({ playerId })),
     command(
         MessageType.GAME_UPDATE_FACTION,
@@ -157,3 +154,29 @@ export const clientCommandSchema = z.discriminatedUnion('type', [
 ]);
 
 export type ClientCommand = z.infer<typeof clientCommandSchema>;
+
+export const clientRequestSchema = z
+    .union([
+        z
+            .object({
+                type: z.literal(MessageType.GAME_LOAD),
+                data: base.extend({ playerId: playerId.nullable().optional() }),
+            })
+            .strict(),
+        z
+            .object({
+                type: z.literal(MessageType.COMMAND_BATCH),
+                id: z.string().uuid(),
+                baseVersion: gameVersionSchema,
+                data: base.extend({ commands: z.array(clientCommandSchema).min(1).max(32) }),
+            })
+            .strict(),
+    ])
+    .superRefine((request, context) => {
+        if (
+            request.type === MessageType.COMMAND_BATCH &&
+            request.data.commands.some(command => command.data.gameId !== request.data.gameId)
+        )
+            context.addIssue({ code: z.ZodIssueCode.custom, message: 'Commands must belong to one game' });
+    });
+export type ClientRequest = z.infer<typeof clientRequestSchema>;
