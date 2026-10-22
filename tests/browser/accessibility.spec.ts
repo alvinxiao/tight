@@ -97,7 +97,7 @@ test('setup controls support names and keyboard input; core screens meet automat
         await press(page.getByRole('button', { name: 'Switch to Dark Theme', exact: true }));
         await scan('scoring in dark theme');
         await page.setViewportSize({ width: 390, height: 844 });
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         await scan('phone-width scoring');
         await page.goto('/no-such-route/extra');
         await expect(page.getByRole('heading', { name: 'Page not found', exact: true })).toBeVisible();
