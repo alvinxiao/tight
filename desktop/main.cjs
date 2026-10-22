@@ -1,6 +1,7 @@
 const { app, BrowserWindow, dialog, session, utilityProcess, ipcMain } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
+const { createSharingPreferences } = require('./sharing-preference.cjs');
 
 app.setName('TIGHT');
 app.setAppUserModelId('org.alvinxiao.tight');
@@ -17,6 +18,10 @@ let recovering = false;
 let quitPrompt = false;
 let activeOrigin;
 let activeHostToken;
+let sharingRestoreError = null;
+let sharingPreferences;
+const sharingPreferencePath = () => path.join(app.getPath('userData'), 'sharing.json');
+const sharingStatus = value => ({ ...value, ...(sharingRestoreError ? { restoreError: sharingRestoreError } : {}) });
 let hostingRequestId = 0;
 const hostingRequests = new Map();
 const expectedExits = new WeakSet();
@@ -181,6 +186,7 @@ async function recover(message) {
     if (result.response === 0) void launch();
     else {
         quitting = true;
+        await rememberSharing();
         await stopBackend();
         app.quit();
     }
@@ -243,10 +249,23 @@ async function launch() {
             sameSite: 'strict',
             secure: false,
         });
+        sharingRestoreError = await sharingPreferences.restore();
         await configureWindow(origin);
+        await requestHosting(null, false);
     } catch (error) {
         void recover(error instanceof Error ? error.message : 'Could not start TIGHT.');
     }
+}
+
+async function rememberSharing() {
+    if (await sharingPreferences.prepareQuit()) return;
+    await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Wi-Fi sharing could not be remembered',
+        message: 'Check Wi-Fi sharing when you reopen TIGHT.',
+        detail: 'The network setting could not be saved. Your committed games are saved separately.',
+        buttons: ['Quit'],
+    });
 }
 
 async function requestQuit() {
@@ -267,6 +286,7 @@ async function requestQuit() {
     quitPrompt = false;
     if (result.response === 1) {
         quitting = true;
+        await rememberSharing();
         await stopBackend();
         app.quit();
     }
@@ -288,15 +308,18 @@ else {
         }
     });
     app.whenReady().then(() => {
+        sharingPreferences = createSharingPreferences(sharingPreferencePath(), requestHosting);
         ipcMain.handle('tight:hosting', async event => {
             await verifyHostFrame(event);
-            return requestHosting(null, false);
+            return sharingStatus(await requestHosting(null, false));
         });
         ipcMain.handle('tight:set-hosting', async (event, address) => {
             await verifyHostFrame(event);
             if (address !== null && (typeof address !== 'string' || address.length > 64))
                 throw new Error('Invalid network selection.');
-            return requestHosting(address, true);
+            const value = await sharingPreferences.change(address);
+            sharingRestoreError = null;
+            return sharingStatus(value);
         });
         session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
         session.defaultSession.setPermissionCheckHandler(() => false);

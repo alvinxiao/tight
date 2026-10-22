@@ -137,6 +137,12 @@ export default function PairDeviceDialog({
                             rejoin.
                         </Alert>
                     )}
+                    {localOnly && native.kind === 'ready' && (
+                        <Alert severity="info">
+                            Open Wi-Fi sharing at the top of the window and start sharing on your private network. Then
+                            create a new invitation here to show its phone QR code.
+                        </Alert>
+                    )}
                     {link && (
                         <TextField
                             label="One-use invitation link"
