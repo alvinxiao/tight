@@ -61,7 +61,6 @@ function createSharingPreferences(filename, requestHosting, files = fs) {
             return enqueue(async () => {
                 if (quitPromise) return 'failed';
                 if (!initialized) {
-                    initialized = true;
                     const saved = readSharingPreference(filename, files);
                     try {
                         forgetSharingPreference(filename, files);
@@ -69,6 +68,7 @@ function createSharingPreferences(filename, requestHosting, files = fs) {
                         restorationError = 'failed';
                         return restorationError;
                     }
+                    initialized = true;
                     if (saved.kind === 'invalid') restorationError = 'unavailable';
                     if (saved.kind === 'selected') approved = saved.adapter;
                 }
@@ -99,8 +99,16 @@ function createSharingPreferences(filename, requestHosting, files = fs) {
                 if (address === null) {
                     approved = null;
                     const current = await requestHosting(null, true);
+                    if (!initialized) {
+                        forgetSharingPreference(filename, files);
+                        initialized = true;
+                    }
                     restorationError = null;
                     return current;
+                }
+                if (!initialized) {
+                    forgetSharingPreference(filename, files);
+                    initialized = true;
                 }
                 const current = await requestHosting(null, false);
                 const adapter = current.interfaces.find(value => value.address === address);

@@ -169,3 +169,29 @@ test('in-flight changes and shutdown are serialized so a later stop cannot be re
     assert.equal(await controller.restore(), 'failed');
     assert.equal(backend.calls.at(-1).address, null);
 });
+
+
+test('failed startup consumption blocks manual sharing and cannot falsely confirm forgetting old approval', async t => {
+    const file = await fixture(t);
+    writeSharingPreference(file, selected);
+    const backend = host();
+    let denied = true;
+    const controller = createSharingPreferences(file, backend.request, {
+        ...fs,
+        unlinkSync(filename) {
+            if (denied) throw Object.assign(new Error('Access denied'), { code: 'EACCES' });
+            fs.unlinkSync(filename);
+        },
+    });
+    assert.equal(await controller.restore(), 'failed');
+    await assert.rejects(controller.change(selected.address), { code: 'EACCES' });
+    assert.deepEqual(backend.calls, [], 'unconsumed approval must never permit a manual LAN bind');
+    await assert.rejects(controller.change(null), { code: 'EACCES' });
+    assert.deepEqual(backend.calls, [{ address: null, change: true }], 'Stop still closes the listener before reporting the preference failure');
+    denied = false;
+    assert.equal((await controller.change(null)).mode, 'local');
+    assert.equal(await controller.prepareQuit(), true);
+    const reopened = host();
+    assert.equal(await createSharingPreferences(file, reopened.request).restore(), null);
+    assert.deepEqual(reopened.calls, [], 'a successfully confirmed Stop cannot restore old approval');
+});
