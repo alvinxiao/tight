@@ -5,9 +5,6 @@ import { GameChangeData, GameChangeDataMap, GameFaction, GamePlanet, GamePlanetM
 import { getGame, listGames, deleteGame } from './database/game.js';
 import log from './log.js';
 
-const REMOVE_GAME_TIME_THRESHOLD = 1000 * 60 * 60 * 4; // 4 hours
-const _gameTimestampMap = new Map<string, number>();
-
 export interface DirtyGameParts {
     created?: boolean;
     deleted?: boolean;
@@ -43,10 +40,9 @@ export function deleteGameAndNotify(gameId: string): boolean {
         return false;
     }
 
-    // Queue the final event while the game still exists, then remove it immediately.
-    markGameDirty(gameId, { deleted: true });
-    _gameTimestampMap.delete(gameId);
-    return deleteGame(gameId);
+    const deleted = deleteGame(gameId);
+    if (deleted) dirty.games[gameId] = { deleted: true };
+    return deleted;
 }
 
 // Helper to mark parts of a Game object to be broadcasted out.
@@ -65,8 +61,6 @@ export function markGameDirty(
     if (!getGame(gameId)) {
         return;
     }
-
-    _gameTimestampMap.set(gameId, Date.now());
 
     const prevDirtyParts = dirty.games[gameId];
 
@@ -111,7 +105,7 @@ export function getDirtyGameData(): GameChangeDataMap | null {
         const gameData: GameChangeData = { id: gameId };
         const { created, deleted, status, planets, players, factions, publicObjectives } = dirtyParts;
         if (deleted) {
-            log(`Removing old game: ${gameId}`);
+            log(`Deleting game: ${gameId}`);
             gameData.deleted = true;
             gameDataMap[gameId] = gameData;
             return;
@@ -186,13 +180,4 @@ export function formatChangePlanets(
     const changedFactions = [...changedFactionsSet.values()];
 
     return { changedPlanets, changedFactions };
-}
-
-export function removeOldGames() {
-    const now = Date.now();
-    _gameTimestampMap.forEach((timestamp, gameId) => {
-        if (now - timestamp > REMOVE_GAME_TIME_THRESHOLD) {
-            deleteGameAndNotify(gameId);
-        }
-    });
 }

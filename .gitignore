@@ -6,3 +6,6 @@
 
 /test-results
 /playwright-report
+
+# Local game saves
+.tight-data/

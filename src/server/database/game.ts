@@ -20,8 +20,22 @@ import { Planets } from './planet/index.js';
 import { GameCreateParams, GameRestartParams } from 'common/api.js';
 import { generateGameCode } from '../utils/game.js';
 
-// Map of all games
-let _games: GameMap = {};
+import { GameStore, dataDirectory } from './GameStore.js';
+
+const store = new GameStore(dataDirectory());
+const _games: GameMap = store.load();
+
+export function mutateGame(id: string, change: () => void): void {
+    const previous = structuredClone(_games[id]);
+    const before = JSON.stringify(previous);
+    try {
+        change();
+        if (JSON.stringify(_games[id]) !== before) _games[id] = store.save(_games[id]);
+    } catch (error) {
+        _games[id] = previous;
+        throw error;
+    }
+}
 
 // Default setting for all planets in a new game
 const DEFAULT_GAME_PLANETS: Readonly<GamePlanetMap> = Planets.reduce((result: GamePlanetMap, planet: Planet) => {
@@ -85,13 +99,13 @@ export function createGame({
 
     const game = initializeGame({ id, version, numPlayers, numRounds, numVictoryPoints, publicObjectives });
 
-    if (_games) {
-        _games[game.id] = game;
-    } else {
-        _games = { [game.id]: game };
-    }
+    _games[game.id] = store.save(game);
 
     return game;
+}
+
+export function importGame(game: Game): void {
+    _games[game.id] = store.save(game);
 }
 
 export function restartGame(options: GameRestartParams): Game | null {
@@ -113,13 +127,14 @@ export function restartGame(options: GameRestartParams): Game | null {
         ...otherGameOptions,
     };
     const newGame = initializeGame(combinedOptions);
-    _games[id] = newGame;
+    _games[id] = store.save(newGame);
 
     return newGame;
 }
 
 export function deleteGame(id: string): boolean {
     if (_games && _games[id]) {
+        store.delete(id);
         delete _games[id];
         return true;
     }

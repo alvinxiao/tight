@@ -9,14 +9,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            node: '24.19.0'
+          - os: windows-latest
+            node: '24.19.0'
+          - os: ubuntu-latest
+            node: '22.13.0'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24.19.0'
+          node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --legacy-peer-deps --no-audit --no-fund
       - run: npm test
@@ -27,14 +33,14 @@ jobs:
           TIGHT_USE_HTTP: 'true'
       - run: npm run typecheck:browser
       - name: Install Chromium
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.node == '24.19.0'
         run: npx playwright install --with-deps chromium
       - name: Browser regression tests
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.node == '24.19.0'
         run: npx playwright test
       - uses: actions/upload-artifact@v4
         if: failure() && runner.os == 'Linux'
         with:
-          name: browser-test-results
+          name: browser-test-results-${{ matrix.node }}
           path: test-results/
           if-no-files-found: ignore
