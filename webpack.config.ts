@@ -78,10 +78,12 @@ if (web) {
 } else {
     config = {
         ...config,
-        entry: desktop ? path.resolve(serverDir, 'bootstrap.ts') : {
-            [dev ? 'server-dev' : 'server']: path.resolve(serverDir, 'index.ts'),
-            backend: path.resolve(serverDir, 'bootstrap.ts'),
-        },
+        entry: desktop
+            ? path.resolve(serverDir, 'bootstrap.ts')
+            : {
+                  [dev ? 'server-dev' : 'server']: path.resolve(serverDir, 'index.ts'),
+                  backend: path.resolve(serverDir, 'bootstrap.ts'),
+              },
         module: { ...config.module, parser: { javascript: { importMeta: false } } },
         output: {
             filename: desktop ? 'desktop-backend.js' : '[name].js',
@@ -125,13 +127,15 @@ if (dev) {
                     target: localhost,
                     ws: true,
                     secure: false,
-                    changeOrigin: isHttps ? true : undefined,
+                    changeOrigin: true,
+                    headers: { Origin: localhost },
                 },
                 {
                     context: '*',
                     target: localhost,
                     secure: false,
-                    changeOrigin: isHttps ? true : undefined,
+                    changeOrigin: true,
+                    headers: { Origin: localhost },
                 },
             ],
             server: protocol,

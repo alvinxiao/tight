@@ -1,4 +1,3 @@
-import cors from 'cors';
 import express, { NextFunction, Request, Response } from 'express';
 import http, { type Server as HttpServer } from 'http';
 import https, { type Server as HttpsServer } from 'https';
@@ -9,6 +8,7 @@ import { dataDirectory as defaultDataDirectory, StorageError } from './database/
 import initializeWebSocketServer from './WebSocketServer.js';
 import { cert, key } from './certs.js';
 import initializeRouter from './rest-api/router.js';
+import { createNetworkPolicy, trustedHostnames, VerifyNetworkRequest } from './networkPolicy.js';
 import { setDirty } from './dirty.js';
 import { initializeGameStorage, closeGameStorage } from './database/game.js';
 export { defaultDataDirectory };
@@ -22,19 +22,29 @@ export interface BackendOptions {
 export async function startBackend(options: BackendOptions) {
     if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535)
         throw new Error('Invalid server port');
+    const hostnames = trustedHostnames(options.host);
     initializeGameStorage(options.dataDirectory);
     setDirty(false);
     try {
         const dirname = path.dirname(fileURLToPath(import.meta.url));
 
+        let verifyRequest: VerifyNetworkRequest = () => ({ status: 503, message: 'Host is starting' });
         const app = express();
+        app.use((req: Request, res: Response, next: NextFunction) => {
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            res.setHeader('X-Frame-Options', 'DENY');
+            res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+            res.setHeader('Referrer-Policy', 'no-referrer');
+            const rejection = verifyRequest(req);
+            if (rejection) res.status(rejection.status).json({ error: rejection.message });
+            else next();
+        });
         let port = options.port;
         const distDir = path.join(dirname, '../dist');
         const html = path.join(distDir, 'index.html');
 
         const publicPath = express.static(distDir);
         app.use(publicPath);
-        app.use(cors());
         app.use('/api/game/import', express.json({ limit: '1mb' }));
         app.use(express.json({ limit: '64kb' }));
         app.use(express.urlencoded({ extended: false, limit: '64kb', parameterLimit: 100 }));
@@ -67,7 +77,7 @@ export async function startBackend(options: BackendOptions) {
             }
         });
 
-        let protocol = 'http';
+        let protocol: 'http' | 'https' = 'http';
         let server: HttpServer | HttpsServer;
         if (key && cert) {
             server = https.createServer({ key, cert }, app);
@@ -79,7 +89,7 @@ export async function startBackend(options: BackendOptions) {
             server = http.createServer(app);
         }
 
-        const sockets = initializeWebSocketServer(server);
+        const sockets = initializeWebSocketServer(server, request => verifyRequest(request));
         let stopPromise: Promise<void> | undefined;
         const stop = () =>
             (stopPromise ??= (async () => {
@@ -105,7 +115,11 @@ export async function startBackend(options: BackendOptions) {
         }
         const address = server.address();
         if (!address || typeof address === 'string') throw new Error('Expected TCP server address');
-        return { origin: `${protocol}://127.0.0.1:${address.port}`, port: address.port, stop };
+        verifyRequest = createNetworkPolicy({ hostnames, protocol, port: address.port });
+        const originHost =
+            options.host && options.host !== '0.0.0.0' && options.host !== '::' ? options.host : '127.0.0.1';
+        const authority = originHost.includes(':') ? `[${originHost}]` : originHost;
+        return { origin: `${protocol}://${authority}:${address.port}`, port: address.port, stop };
     } catch (error) {
         closeGameStorage();
         throw error;

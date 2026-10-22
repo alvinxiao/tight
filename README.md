@@ -82,3 +82,7 @@ Games survive backend restarts and no longer expire after four hours. See [stora
 ## Windows desktop preview
 
 See [the desktop guide](docs/windows-desktop.md) for the preview artifact, development commands, storage, and validation limits. The launcher manages its own backend and requires no separate Node installation for users.
+
+## Network boundaries
+
+The backend rejects unexpected Host headers and foreign browser origins for HTTP and WebSocket requests. See [network boundaries](docs/network-boundaries.md) for supported addresses, development proxy behavior, and the remaining authentication work.

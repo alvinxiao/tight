@@ -14,6 +14,7 @@ import parseClientMessage from './parseClientMessage.js';
 import { connectionQuerySchema } from './commandSchemas.js';
 import validateCommandState from './validateCommandState.js';
 import log from './log.js';
+import { VerifyNetworkRequest } from './networkPolicy.js';
 
 const KEEP_ALIVE_INTERVAL = 10000; // ms
 const BROADCAST_INTERVAL = 300; // ms
@@ -101,8 +102,16 @@ function onConnection({ wss, ws, request }: OnConnectionParam) {
     sendData({ ws, type: MessageType.BROADCAST_INITIALIZE, data });
 }
 
-export default function initialize(server: HttpServer | HttpsServer) {
-    const wss = new WSServer({ server, maxPayload: 64 * 1024 });
+export default function initialize(server: HttpServer | HttpsServer, verifyRequest: VerifyNetworkRequest) {
+    const wss = new WSServer({
+        server,
+        maxPayload: 64 * 1024,
+        verifyClient: (info, done) => {
+            const rejection = verifyRequest(info.req);
+            if (rejection) done(false, rejection.status, rejection.message);
+            else done(true);
+        },
+    });
     wss.on('error', () => log('WebSocket server error'));
     wss.on('connection', (ws: WebSocket, request: IncomingMessage) => onConnection({ wss, ws, request }));
 
@@ -142,11 +151,12 @@ export default function initialize(server: HttpServer | HttpsServer) {
 
     let stopped: Promise<void> | undefined;
     return {
-        stop: () => stopped ??= new Promise<void>(resolve => {
-            clearInterval(heartbeat);
-            clearInterval(broadcasts);
-            wss.clients.forEach(client => client.terminate());
-            wss.close(() => resolve());
-        }),
+        stop: () =>
+            (stopped ??= new Promise<void>(resolve => {
+                clearInterval(heartbeat);
+                clearInterval(broadcasts);
+                wss.clients.forEach(client => client.terminate());
+                wss.close(() => resolve());
+            })),
     };
 }

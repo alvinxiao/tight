@@ -9,8 +9,13 @@ try {
         dataDirectory: defaultDataDirectory(),
     });
     const protocol = new URL(backend.origin).protocol;
+    const bindHost = process.env.TIGHT_HOST;
+    const address =
+        bindHost && bindHost !== '0.0.0.0' && bindHost !== '::'
+            ? backend.origin
+            : `${protocol}//${ip.address()}:${backend.port}/`;
     console.log(`Server listening on port: ${backend.port}`);
-    console.log(`Server running on: ${chalk.cyanBright(`${protocol}//${ip.address()}:${backend.port}/`)}`);
+    console.log(`Server running on: ${chalk.cyanBright(address)}`);
     const shutdown = () => {
         void backend.stop().then(
             () => process.exit(0),
