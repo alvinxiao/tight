@@ -127,14 +127,14 @@ export class GameStore {
     }
     private validateCommandStorage(games: GameMap): void {
         const versions = new Map<string, GameVersion>();
-        for (const raw of this.database.prepare('SELECT id, incarnation, revision FROM games').iterate()) {
+        for (const raw of this.database.prepare('SELECT id, incarnation, revision FROM games').all()) {
             const row = z.object({ id: z.string(), incarnation: z.string(), revision: z.number() }).parse(raw);
             versions.set(row.id, gameVersionSchema.parse({ incarnation: row.incarnation, revision: row.revision }));
         }
         let count = 0;
         for (const raw of this.database
-            .prepare('SELECT game_id, principal, command_id, payload_hash, revision FROM command_receipts')
-            .iterate()) {
+            .prepare('SELECT game_id, principal, command_id, payload_hash, revision FROM command_receipts LIMIT 10001')
+            .all()) {
             if (++count > 10000) throw new Error('Saved command receipt limit exceeded');
             const row = receiptSchema.parse(raw);
             const version = versions.get(row.game_id);
