@@ -23,6 +23,7 @@ import { useAppContext } from '../Context';
 import useGameInfo from '../hooks/useGameInfo';
 import { ActionType } from '../reducer';
 import api from '../utils/api';
+import useDialogRequest from '../hooks/useDialogRequest';
 import { isGameCode } from 'common/gameCode';
 
 const styles: Record<string, SxProps<Theme>> = {
@@ -55,13 +56,15 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
     const { dispatch } = useAppContext();
 
     const [gameId, setGameId] = useState('');
-    const [error, setError] = useState<'invalid' | 'network' | null>(null);
+    const [invalid, setInvalid] = useState(false);
+    const { pending: joining, error: networkError, run, cancel } = useDialogRequest(open);
+    const error = invalid ? 'invalid' : networkError ? 'network' : null;
     const [canRejoin, setCanRejoin] = useState(true);
-    const [joining, setJoining] = useState(false);
 
     const navigate = useNavigate();
 
     const onCancel = () => {
+        cancel();
         onClose();
     };
 
@@ -70,14 +73,12 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
         e.stopPropagation();
 
         if (!isGameCode(id)) {
-            setError('invalid');
+            setInvalid(true);
             return;
         }
-        setError(null);
-        setJoining(true);
+        setInvalid(false);
 
-        api.gameValidate({ gameId: id })
-            .then(exists => {
+        void run(signal => api.gameValidate({ gameId: id }, { signal }), exists => {
                 if (exists) {
                     navigate(`/${id}`);
                 } else {
@@ -86,12 +87,10 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                     }
 
                     if (id === gameId) {
-                        setError('invalid');
+                        setInvalid(true);
                     }
                 }
-            })
-            .catch(() => setError('network'))
-            .finally(() => setJoining(false));
+            });
     };
 
     return (

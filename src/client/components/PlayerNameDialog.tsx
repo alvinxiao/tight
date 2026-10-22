@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import CloseIcon from '@mui/icons-material/Close';
 import {
     AppBar,
+    Alert,
     Button,
     CircularProgress,
     Dialog,
@@ -66,16 +67,25 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
     const [isNewPlayer, setIsNewPlayer] = useState(!Boolean(playerId));
     const [selectedPlayerId, setSelectedPlayerId] = useState(playerId ?? '');
     const [joining, setJoining] = useState(false);
+    const [joinError, setJoinError] = useState(false);
 
     const navigate = useNavigate();
 
     useEffect(() => {
         if (joining && game?.players.includes(selectedPlayerId)) {
             setJoining(false);
+            onClose?.(false);
             dispatch({ type: ActionType.setPlayerId, payload: selectedPlayerId });
             navigate(`/${gameId}/status`);
         }
     }, [game, joining, selectedPlayerId]);
+
+    useEffect(() => {
+        if (!open) { setJoining(false); setJoinError(false); }
+        if (!open || !joining) return;
+        const timer = setTimeout(() => { setJoining(false); setJoinError(true); }, 15000);
+        return () => clearTimeout(timer);
+    }, [open, joining]);
 
     if (!game) {
         return null;
@@ -89,17 +99,18 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
             return;
         }
 
-        setJoining(true);
-
-        sendData({
+        setJoinError(false);
+        const sent = sendData({
             type: MessageType.GAME_ADD_PLAYER,
             data: { gameId, playerId: selectedPlayerId },
         });
 
-        onClose?.(false);
+        setJoining(sent);
+        setJoinError(!sent);
     };
 
     const onCancel = () => {
+        setJoining(false);
         onClose?.(true);
     };
 
@@ -126,6 +137,7 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
                 </Toolbar>
             </AppBar>
             <DialogContent dividers>
+                {joinError && <Alert severity="error">Could not confirm your player joined. Check the connection and try again.</Alert>}
                 <GameInfoToolbar game={game} sx={{ marginBottom: 1 }} hideRestartButton />
                 <Grid container direction="column" justifyContent="center" alignItems="center" spacing={2}>
                     <Grid item sx={styles.gridItem}>

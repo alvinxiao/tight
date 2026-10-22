@@ -1,15 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import { AppBar, Button, CircularProgress, Grid, IconButton, Toolbar, Tooltip, Typography } from '@mui/material';
 import { makeStyles } from '@mui/styles';
 
-import { Faction } from 'common/Faction';
 
 import FactionInfo, { FactionAccordionIndex, FactionInfoProps } from '../components/FactionInfo';
 import FactionSelect from '../components/FactionSelect';
 import api from '../utils/api';
+import useRemoteData from '../hooks/useRemoteData';
+import LoadFailure from '../components/LoadFailure';
 
 import { HEADER_HEIGHT } from '../constants';
 
@@ -29,10 +30,19 @@ const useStyles = makeStyles(theme => ({
 function Factions() {
     const classes = useStyles();
 
-    const [factionInfo, setFactionInfo] = useState<Faction | null>(null);
-    const [factionNames, setFactionNames] = useState<string[]>([]);
-    const [selectedName, setSelectedName] = useState<string>('');
-    const [pending, setPending] = useState(false);
+    const [selectedName, setSelectedName] = useState('');
+    const load = useCallback(async (signal: AbortSignal) => {
+        const names = await api.factionListNames(undefined, { signal });
+        const name = selectedName || names[0];
+        const [faction] = await api.factionGetFaction({ name }, { signal });
+        if (!faction) throw new Error('Faction not found');
+        return { names, faction, name };
+    }, [selectedName]);
+    const { resource, retry } = useRemoteData(load);
+    const pending = resource.kind === 'loading';
+    const factionInfo = resource.kind === 'loaded' ? resource.data.faction : null;
+    const factionNames = resource.kind === 'loaded' ? resource.data.names : [];
+    const displayName = resource.kind === 'loaded' ? resource.data.name : selectedName;
 
     const [expanded, setExpanded] = useState<boolean[]>(Array(COUNT).fill(false));
 
@@ -42,36 +52,11 @@ function Factions() {
         setExpanded(newExpanded);
     };
 
-    useEffect(() => {
-        setPending(true);
+    if (resource.kind === 'error') return <LoadFailure retry={retry} />;
+    if (pending) return <CircularProgress aria-label="Loading factions" />;
+    const onFactionChange = setSelectedName;
 
-        const setup = async () => {
-            const names = await api.factionListNames();
-            const [firstFaction] = await api.factionGetFaction({ name: names[0] });
-            setFactionNames(names);
-            setSelectedName(names[0]);
-            setFactionInfo(firstFaction);
-            setPending(false);
-        };
-
-        setup();
-    }, []);
-
-    // Don't render until we have enough data.
-    if (factionNames.length === 0 || !selectedName) {
-        return null;
-    }
-
-    const onFactionChange = (factionName: string) => {
-        setPending(true);
-        setSelectedName(factionName);
-        api.factionGetFaction({ name: factionName }).then(factions => {
-            setFactionInfo(factions[0] ?? null);
-            setPending(false);
-        });
-    };
-
-    const index = factionNames.indexOf(selectedName);
+    const index = factionNames.indexOf(displayName);
     const lastIndex = factionNames.length - 1;
     const prevFaction = index === 0 ? factionNames[lastIndex] : factionNames[index - 1];
     const nextFaction = index === lastIndex ? factionNames[0] : factionNames[index + 1];
@@ -88,7 +73,7 @@ function Factions() {
                     <FactionSelect
                         fullWidth
                         factionNames={factionNames}
-                        value={selectedName}
+                        value={displayName}
                         onChange={onFactionChange}
                         hideNone
                     />

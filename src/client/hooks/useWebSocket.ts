@@ -1,36 +1,14 @@
 import { Dispatch, useCallback, useEffect, useRef } from 'react';
-
-import { Message, MessageType } from 'common/message';
-
+import { MessageType } from 'common/message';
 import { Action, ActionType, State } from '../reducer';
 
 const RETRY_LIMIT = 5;
 const RETRY_INTERVAL = 3000;
+const OPEN_TIMEOUT = 10000;
 
 export interface SendDataFunction {
-    ({ type, data }: { type: MessageType; data?: any }): void;
+    ({ type, data }: { type: MessageType; data?: unknown }): boolean;
 }
-
-function onWebSocketMessage(dispatch: React.Dispatch<Action>, e: MessageEvent) {
-    const msg = JSON.parse(e.data);
-    const { type, data } = msg || {};
-
-    switch (type) {
-        case MessageType.BROADCAST_INITIALIZE:
-            dispatch({ type: ActionType.setState, payload: data });
-            break;
-        case MessageType.BROADCAST_CHANGE:
-            dispatch({ type: ActionType.updateState, payload: data });
-            break;
-        default:
-            break;
-    }
-}
-
-function sendData({ ws, type, data }: { ws: WebSocket; type: MessageType; data?: any }) {
-    ws.send(JSON.stringify({ type, data }));
-}
-
 export interface WebSocketOptions {
     url: string;
     dispatch: Dispatch<Action>;
@@ -38,119 +16,97 @@ export interface WebSocketOptions {
 }
 
 export default function useWebSocket(options: WebSocketOptions) {
-    const wsRef = useRef<WebSocket | null>(null);
-    const initRef = useRef({ initialized: false, initializing: false });
-    const retryRef = useRef(0);
-
-    const optionsRef = useRef<WebSocketOptions>(options);
+    const optionsRef = useRef(options);
     optionsRef.current = options;
-
-    // These callback functions must use refs for passing data since the callbacks are only attached
-    // when opening a new connection.
-    const onOpen = useCallback(() => {
-        // Trigger initialize callback if first time.
-        const { dispatch } = optionsRef.current;
-        if (!initRef.current.initialized) {
-            initRef.current.initialized = true;
-            initRef.current.initializing = false;
-        }
-
-        dispatch({ type: ActionType.setConnecting, payload: { connecting: false, connectError: false } });
+    const wsRef = useRef<WebSocket | null>(null);
+    const attempts = useRef(0);
+    const active = useRef(false);
+    const retryTimer = useRef<ReturnType<typeof setTimeout>>();
+    const openTimer = useRef<ReturnType<typeof setTimeout>>();
+    const clearTimers = useCallback(() => {
+        clearTimeout(retryTimer.current);
+        clearTimeout(openTimer.current);
     }, []);
-
-    const onClose = useCallback((e: CloseEvent) => {
-        const { connecting, connectError } = optionsRef.current.state;
-        if (e.code === 1008 || e.code === 1011) {
-            optionsRef.current.dispatch({ type: ActionType.setConnecting, payload: { connecting: false, connectError: true } });
-            return;
-        }
-        if (!e.wasClean && !connecting && !connectError) {
-            connect();
-        }
-    }, []);
-
-    const onMessage = useCallback((e: MessageEvent) => onWebSocketMessage(optionsRef.current.dispatch, e), []);
-
-    const onError = useCallback((e: Event) => {
-        const ws = wsRef.current;
-        if (ws?.readyState === WebSocket.CONNECTING) {
-            console.log('Error connecting web socket');
-        }
+    const failed = useCallback(() => {
+        optionsRef.current.dispatch({ type: ActionType.setConnecting, payload: { connecting: false, connectError: true } });
     }, []);
 
     const connect = useCallback(() => {
-        if (document.visibilityState !== 'visible') {
-            return;
-        }
-
+        if (!active.current || document.visibilityState !== 'visible') return;
+        const current = wsRef.current;
+        if (current && (current.readyState === WebSocket.OPEN || current.readyState === WebSocket.CONNECTING)) return;
+        clearTimers();
+        if (attempts.current >= RETRY_LIMIT) { failed(); return; }
+        attempts.current += 1;
         const { state, dispatch, url } = optionsRef.current;
-        if (retryRef.current < RETRY_LIMIT) {
-            let ws = wsRef.current;
-            if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
-                dispatch({ type: ActionType.setConnecting, payload: { connecting: true, connectError: false } });
-
-                // Create new connection to the server
-                const gameId = state.game?.id || sessionStorage.getItem('gameId');
-                const playerId = state.playerId || sessionStorage.getItem('playerId');
-                const endpoint = new URL(url);
-                if (gameId) endpoint.searchParams.set('gameId', gameId);
-                if (playerId) endpoint.searchParams.set('playerId', playerId);
-                ws = new WebSocket(endpoint.href);
-                ws.onopen = onOpen;
-                ws.onmessage = onMessage;
-                ws.onclose = onClose;
-                ws.onerror = onError;
-                wsRef.current = ws;
-            }
-        }
-
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-            retryRef.current = 0;
-        } else {
-            if (retryRef.current < RETRY_LIMIT) {
-                retryRef.current += 1;
-                setTimeout(connect, RETRY_INTERVAL);
-            } else if (retryRef.current === RETRY_LIMIT) {
-                dispatch({ type: ActionType.setConnecting, payload: { connecting: false, connectError: true } });
-            }
-        }
-    }, []);
+        dispatch({ type: ActionType.setConnecting, payload: { connecting: true, connectError: false } });
+        const endpoint = new URL(url);
+        const gameId = state.game?.id || sessionStorage.getItem('gameId');
+        const playerId = state.playerId || sessionStorage.getItem('playerId');
+        if (gameId) endpoint.searchParams.set('gameId', gameId);
+        if (playerId) endpoint.searchParams.set('playerId', playerId);
+        const ws = new WebSocket(endpoint.href);
+        wsRef.current = ws;
+        const isCurrent = () => active.current && wsRef.current === ws;
+        openTimer.current = setTimeout(() => {
+            if (isCurrent() && ws.readyState !== WebSocket.OPEN) ws.close();
+        }, OPEN_TIMEOUT);
+        ws.onopen = () => {
+            if (!isCurrent()) return;
+            clearTimers();
+            attempts.current = 0;
+            optionsRef.current.dispatch({ type: ActionType.setConnecting, payload: { connecting: false, connectError: false } });
+        };
+        ws.onmessage = event => {
+            if (!isCurrent()) return;
+            const { type, data } = JSON.parse(event.data);
+            if (type === MessageType.BROADCAST_INITIALIZE)
+                optionsRef.current.dispatch({ type: ActionType.setState, payload: data });
+            else if (type === MessageType.BROADCAST_CHANGE)
+                optionsRef.current.dispatch({ type: ActionType.updateState, payload: data });
+        };
+        ws.onclose = event => {
+            if (!isCurrent()) return;
+            clearTimers();
+            wsRef.current = null;
+            if (event.code === 1008 || event.code === 1011 || attempts.current >= RETRY_LIMIT) { failed(); return; }
+            if (document.visibilityState === 'visible') retryTimer.current = setTimeout(connect, RETRY_INTERVAL);
+        };
+        // The close handler owns retrying failures, including rejected handshakes.
+        ws.onerror = () => {};
+    }, [clearTimers, failed]);
 
     useEffect(() => {
-        // When a device sleeps/moves the browser to the background, it will close web socket connections.
-        // Reconnect when the page becomes visible/active again.
+        active.current = true;
+        connect();
         document.addEventListener('visibilitychange', connect);
-
-        if (!initRef.current.initialized && !initRef.current.initializing) {
-            initRef.current.initializing = true;
-            connect();
-        }
-
         return () => {
-            if (wsRef.current) {
-                wsRef.current.close();
-            }
-
+            active.current = false;
+            clearTimers();
+            const ws = wsRef.current;
+            wsRef.current = null;
+            ws?.close();
             document.removeEventListener('visibilitychange', connect);
         };
-    }, []);
+    }, [connect, clearTimers]);
 
     useEffect(() => {
-        if (options.state.reconnect) {
-            retryRef.current = 0;
-            options.dispatch({ type: ActionType.setConnecting, payload: { reconnect: false } });
-            connect();
-        }
-    }, [options.state.reconnect]);
+        if (!options.state.reconnect) return;
+        attempts.current = 0;
+        options.dispatch({ type: ActionType.setConnecting, payload: { reconnect: false } });
+        connect();
+    }, [options.state.reconnect, connect]);
 
-    // Only generate this function once. Should only rely on refs.
-    const sd: SendDataFunction = useCallback(({ type, data }: Message): void => {
+    const sendData: SendDataFunction = useCallback(({ type, data }) => {
         const ws = wsRef.current;
-        const isOpen = ws && ws.readyState === WebSocket.OPEN;
-        if (isOpen) {
-            sendData({ ws, type, data });
+        if (!ws || ws.readyState !== WebSocket.OPEN) { failed(); return false; }
+        try {
+            ws.send(JSON.stringify({ type, data }));
+            return true;
+        } catch {
+            failed();
+            return false;
         }
-    }, []);
-
-    return { sendData: sd };
+    }, [failed]);
+    return { sendData };
 }

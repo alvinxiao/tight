@@ -20,6 +20,7 @@ import { useAppContext } from '../Context';
 import { ActionType } from '../reducer';
 
 import api from '../utils/api';
+import useDialogRequest from '../hooks/useDialogRequest';
 
 import NewGameForm, { GameOptions, DEFAULT_GAME_OPTIONS } from './NewGameForm';
 
@@ -46,32 +47,22 @@ function NewGameDialog(props: NewGameDialogProps) {
     const { open, onClose } = props;
 
     const [gameOptions, setGameOptions] = useState<GameOptions>(() => ({ ...DEFAULT_GAME_OPTIONS }));
-    const [creatingGame, setCreatingGame] = useState(false);
-    const [createError, setCreateError] = useState(false);
+    const { pending: creatingGame, error: createError, run, cancel } = useDialogRequest(open);
 
     const navigate = useNavigate();
 
     const onCancel = () => {
+        cancel();
         onClose();
     };
 
-    const onSave = async () => {
-        setCreatingGame(true);
-        setCreateError(false);
-        try {
-            const gameCode = await api.gameCreate(gameOptions);
-            if (gameCode) {
-                dispatch({ type: ActionType.setPlayerId, payload: null });
-                navigate(`/${gameCode}`);
-            }
-
-            onClose();
-        } catch {
-            setCreateError(true);
-        } finally {
-            setCreatingGame(false);
+    const onSave = () => run(signal => api.gameCreate(gameOptions, { signal }), gameCode => {
+        if (gameCode) {
+            dispatch({ type: ActionType.setPlayerId, payload: null });
+            navigate(`/${gameCode}`);
         }
-    };
+        onClose();
+    });
 
     const { publicObjectives } = gameOptions;
     const hasError = !publicObjectives?.length;
@@ -94,7 +85,7 @@ function NewGameDialog(props: NewGameDialogProps) {
                 </Button>
             </AppBar>
             <DialogContent dividers>
-                {createError && <Alert severity="error">Could not create the game. Check the game options and your connection, then try again.</Alert>}
+                {createError && <Alert severity="error">Could not create the game or confirm it was saved. Close this dialog and check saved games before trying again.</Alert>}
                 <NewGameForm gameOptions={gameOptions} onChange={options => setGameOptions(options)} />
             </DialogContent>
         </Dialog>
