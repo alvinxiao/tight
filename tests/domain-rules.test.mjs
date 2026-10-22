@@ -10,6 +10,7 @@ const {
     getNextFaction,
     buildStrategyCardOwners,
     strategyCardHasOwner,
+    getStrategyCardOwner,
     calculateVictoryPoints,
 } = rules;
 const faction = (name, strategyCard = Card.NONE, fields = {}) => ({
@@ -62,6 +63,10 @@ for (const [base, alternate] of [
         for (const held of [base, alternate]) {
             const owners = buildStrategyCardOwners({ factions: [faction('Owner', held), faction('Waiting')] });
             assert.equal(owners[held], 'Owner');
+            assert.deepEqual(getStrategyCardOwner(owners, base), { owner: 'Owner', card: held });
+            assert.deepEqual(getStrategyCardOwner(owners, alternate), { owner: 'Owner', card: held });
+            assert.equal(getStrategyCardOwner(owners, Card.TRADE), null);
+            assert.equal(getStrategyCardOwner(owners, Card.NONE), null);
             assert.equal(strategyCardHasOwner(owners, base), true);
             assert.equal(strategyCardHasOwner(owners, alternate), true);
             assert.equal(strategyCardHasOwner(owners, Card.TRADE), false);
@@ -69,6 +74,23 @@ for (const [base, alternate] of [
         }
     });
 }
+
+test('ownership resolves an exact card first when a legacy save contains both family versions', () => {
+    const owners = buildStrategyCardOwners({
+        factions: [
+            faction('Base owner', Card.CONSTRUCTION),
+            faction('Expansion owner', Card.CONSTRUCTION_2),
+            faction('Trade owner', Card.TRADE),
+        ],
+    });
+    assert.deepEqual(getStrategyCardOwner(owners, Card.CONSTRUCTION), { owner: 'Base owner', card: Card.CONSTRUCTION });
+    assert.deepEqual(getStrategyCardOwner(owners, Card.CONSTRUCTION_2), {
+        owner: 'Expansion owner',
+        card: Card.CONSTRUCTION_2,
+    });
+    assert.deepEqual(getStrategyCardOwner(owners, Card.TRADE), { owner: 'Trade owner', card: Card.TRADE });
+    assert.equal(getStrategyCardOwner(owners, Card.NONE), null);
+});
 
 test('strategy turns follow speaker pick order and action turns follow assigned initiative', () => {
     const game = {

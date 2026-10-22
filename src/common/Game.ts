@@ -258,15 +258,22 @@ export function buildStrategyCardOwners(game: Game | GameClientData): string[] {
     return stratCardOwners;
 }
 
-/**
- * Check if a strategy card, or other versions of it, is currently owned by a faction.
- */
+export function getStrategyCardOwner(
+    stratCardOwners: string[],
+    initiative: number,
+): { owner: string; card: number } | null {
+    const family = Object.entries(StrategyCardsWithVersions).find(([base]) => Number(base) === Math.floor(initiative));
+    const variants = family ? [Number(family[0]), ...family[1]] : [];
+    const cards = [initiative, ...variants.filter(card => card !== initiative)];
+    for (const card of cards) {
+        const owner = stratCardOwners[card];
+        if (owner) return { owner, card };
+    }
+    return null;
+}
+
 export function strategyCardHasOwner(stratCardOwners: string[], initiative: number): boolean {
-    const baseInitiative = Math.floor(initiative) as keyof typeof StrategyCardsWithVersions;
-    return (
-        Boolean(stratCardOwners[baseInitiative]) ||
-        (StrategyCardsWithVersions[baseInitiative]?.some(version => Boolean(stratCardOwners[version])) ?? false)
-    );
+    return getStrategyCardOwner(stratCardOwners, initiative) !== null;
 }
 
 /**

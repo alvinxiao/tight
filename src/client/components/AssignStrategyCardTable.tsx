@@ -69,6 +69,15 @@ export default function AssignStrategyCardTable() {
                                     <MenuItem key={0} value={0}>
                                         None
                                     </MenuItem>
+                                    {faction.strategyCard !== StrategyCardIndex.NONE &&
+                                        !strategyCards.some(card => card.initiative === faction.strategyCard) && (
+                                            <MenuItem value={faction.strategyCard}>
+                                                {StrategyCardIndex[faction.strategyCard]
+                                                    .split('_')
+                                                    .map(word => word[0] + word.slice(1).toLowerCase())
+                                                    .join(' ')}
+                                            </MenuItem>
+                                        )}
                                     {strategyCards
                                         .filter(s => canSelectStrategyCard(s, game, faction))
                                         .map(s => (
