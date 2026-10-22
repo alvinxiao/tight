@@ -8,6 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import WebSocket from 'ws';
 import { createHash } from 'node:crypto';
 import { MessageType as T } from './helpers/message-types.mjs';
+import { trackCommands, makeBatch, sendCommand } from './helpers/command-client.mjs';
 process.env.TIGHT_USE_HTTP = 'true';
 const { startBackend } = await import('../build/backend.js');
 
@@ -59,7 +60,7 @@ async function fixture(t) {
         const endpoint = new URL('/socket', backend.origin.replace('http:', 'ws:'));
         if (id) endpoint.searchParams.set('gameId', id);
         if (name) endpoint.searchParams.set('playerId', name);
-        const ws = new WebSocket(endpoint, { headers: { cookie } });
+        const ws = trackCommands(new WebSocket(endpoint, { headers: { cookie } }));
         ws.on('error', () => {});
         sockets.add(ws);
         const initial = await packet(ws);
@@ -99,14 +100,31 @@ async function fixture(t) {
 }
 async function command(ws, type, data, predicate = () => true) {
     const result = packet(ws, event => event.type === T.BROADCAST_CHANGE && predicate(event.data.game));
-    ws.send(JSON.stringify({ type, data }));
+    await sendCommand(ws, type, data);
     return (await result).data.game;
 }
 async function denied(ws, type, data) {
-    const closed = once(ws, 'close', { signal: AbortSignal.timeout(3000) });
-    ws.send(JSON.stringify({ type, data }));
-    assert.equal((await closed)[0], 1008);
+    const frame = makeBatch(ws, [{ type, data }]);
+    const outcome = new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { cleanup(); reject(new Error('No permission denial')); }, 3000);
+        function receive(raw) {
+            const packet = JSON.parse(raw);
+            if (packet.type === T.COMMAND_RESULT && packet.data.id === frame.id) {
+                cleanup();
+                resolve({ status: packet.data.status });
+            }
+        }
+        function close(code) { cleanup(); resolve({ code }); }
+        function cleanup() { clearTimeout(timer); ws.off('message', receive); ws.off('close', close); }
+        ws.on('message', receive);
+        ws.on('close', close);
+    });
+    ws.send(JSON.stringify(frame));
+    const result = await outcome;
+    if ('code' in result) assert.equal(result.code, 1008);
+    else assert.equal(result.status, 'rejected');
 }
+
 const secret = description => [-1, -2, -3].map(id => ({ cleared: false, objective: { id, description, vp: 1 } }));
 
 test('host claims are single-use and unpaired or forged credentials cannot read or change games', async t => {

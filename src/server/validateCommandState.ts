@@ -21,7 +21,6 @@ export default function validateCommandState(command: ClientCommand, game: Game)
                 return 'Faction index out of bounds';
             }
             break;
-        case MessageType.GAME_LOAD:
         case MessageType.GAME_ADD_PLAYER:
             if (
                 data.playerId &&

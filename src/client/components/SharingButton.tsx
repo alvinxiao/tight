@@ -122,6 +122,7 @@ export default function SharingButton() {
                                             value={`${origin}/`}
                                             size={192}
                                             marginSize={4}
+                                            style={{ alignSelf: 'center', maxWidth: '100%', height: 'auto' }}
                                         />
                                         <Typography>
                                             Already-paired devices can scan this code to reconnect. For a new device,

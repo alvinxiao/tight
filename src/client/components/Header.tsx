@@ -7,6 +7,8 @@ import ErroIcon from '@mui/icons-material/Error';
 import MenuIcon from '@mui/icons-material/Menu';
 import {
     AppBar,
+    Alert,
+    Snackbar,
     Button,
     CircularProgress,
     Grid,
@@ -37,7 +39,7 @@ function Header() {
 
     const {
         dispatch,
-        state: { playerId, theme, connecting, connectError },
+        state: { playerId, theme, connecting, connectError, saveStatus, commandNotice },
     } = useAppContext();
 
     const onThemeChange = (theme: AppTheme) => {
@@ -104,6 +106,17 @@ function Header() {
                     </Grid>
                     {connectionStatus}
                     <SharingButton />
+                    {saveStatus !== 'idle' && (
+                        <Typography role="status" aria-live="polite" variant="caption" sx={{ px: 1, flexShrink: 0 }}>
+                            {saveStatus === 'pending'
+                                ? 'Saving…'
+                                : saveStatus === 'saved'
+                                  ? 'Saved'
+                                  : saveStatus === 'unconfirmed'
+                                    ? 'Unconfirmed'
+                                    : 'Not saved'}
+                        </Typography>
+                    )}
                     <Tooltip title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}>
                         <IconButton onClick={() => onThemeChange(theme === 'dark' ? 'light' : 'dark')} size="large">
                             {theme === 'dark' ? <Brightness6Outlined /> : <Brightness6 />}
@@ -111,6 +124,37 @@ function Header() {
                     </Tooltip>
                 </Toolbar>
             </AppBar>
+            <Snackbar open={Boolean(commandNotice)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+                <Alert
+                    severity={commandNotice?.kind === 'failed' ? 'error' : 'warning'}
+                    onClose={
+                        commandNotice?.kind === 'failed'
+                            ? () =>
+                                  dispatch({
+                                      type: ActionType.setCommandStatus,
+                                      payload: { commandNotice: null, saveStatus: 'idle' },
+                                  })
+                            : undefined
+                    }
+                >
+                    {commandNotice?.message}
+                    <div>
+                        {commandNotice?.kind === 'unconfirmed' && (
+                            <Button
+                                color="inherit"
+                                onClick={() =>
+                                    dispatch({ type: ActionType.setConnecting, payload: { reconnect: true } })
+                                }
+                            >
+                                Check last change
+                            </Button>
+                        )}
+                        <Button color="inherit" onClick={() => window.location.reload()}>
+                            Reload current game
+                        </Button>
+                    </div>
+                </Alert>
+            </Snackbar>
             {session.role === 'player' && (
                 <Typography variant="body2" sx={{ px: 2, py: 1 }}>
                     Playing as {session.playerId}. The host controls setup and game phases.

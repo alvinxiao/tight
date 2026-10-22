@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import WebSocket from 'ws';
 import { MessageType as T } from './helpers/message-types.mjs';
+import { trackCommands, sendCommand } from './helpers/command-client.mjs';
 process.env.TIGHT_USE_HTTP = 'true';
 const { startBackend } = await import('../build/backend.js');
 
@@ -95,7 +96,7 @@ test('one host shares over a selected private adapter without restarting the hos
     assert.equal(claimed.status, 200);
     const guestCookie = claimed.headers.get('set-cookie').split(';')[0];
     async function connect(origin, cookie) {
-        const ws = new WebSocket(`${origin.replace('http:', 'ws:')}/socket?gameId=${id}`, { headers: { cookie } });
+        const ws = trackCommands(new WebSocket(`${origin.replace('http:', 'ws:')}/socket?gameId=${id}`, { headers: { cookie } }));
         ws.on('error', () => {});
         sockets.push(ws);
         await packet(ws);
@@ -107,7 +108,7 @@ test('one host shares over a selected private adapter without restarting the hos
         const observed = [host, guest].map(ws =>
             packet(ws, event => event.type === T.BROADCAST_CHANGE && predicate(event.data.game)),
         );
-        host.send(JSON.stringify({ type, data }));
+        await sendCommand(host, type, data);
         await Promise.all(observed);
     }
     await both(
@@ -115,13 +116,8 @@ test('one host shares over a selected private adapter without restarting the hos
         { gameId: id, order: 0, name: 'The Arborec', playerIds: ['LAN player'] },
         game => game.factions?.[0]?.name === 'The Arborec',
     );
-    const observed = [host, guest].map(ws => packet(ws, event => event.data.game?.factions?.[0]?.victoryPoints === 2));
-    guest.send(
-        JSON.stringify({
-            type: T.SET_VICTORY_POINTS,
-            data: { gameId: id, factionName: 'The Arborec', victoryPoints: 2 },
-        }),
-    );
+    const observed = [host, guest].map(ws => packet(ws, event => event.type === T.BROADCAST_CHANGE && event.data.game?.factions?.[0]?.victoryPoints === 2));
+    await sendCommand(guest, T.SET_VICTORY_POINTS, { gameId: id, factionName: 'The Arborec', victoryPoints: 2 });
     await Promise.all(observed);
     await backend.setLanHost(adapter.address);
     assert.equal(guest.readyState, WebSocket.OPEN, 'choosing the current adapter is idempotent');

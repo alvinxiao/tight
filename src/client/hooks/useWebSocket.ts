@@ -1,11 +1,43 @@
 import { Dispatch, useCallback, useEffect, useRef } from 'react';
+import { z } from 'zod';
 import { MessageType } from 'common/message';
-import { Action, ActionType, State } from '../reducer';
+import { commandResultSchema } from 'common/commandResult';
+import { GameVersion, gameVersionSchema } from 'common/gameVersion';
+import { GAME_CODE_PATTERN } from 'common/gameCode';
+import uuidv4 from 'common/uuidv4';
+import { Action, ActionType, CommandNotice, State } from '../reducer';
 
 const RETRY_LIMIT = 5;
 const RETRY_INTERVAL = 3000;
 const OPEN_TIMEOUT = 10000;
-
+const ACK_TIMEOUT = 10000;
+const COMMAND_ATTEMPTS = 3;
+const MAX_PENDING = 32;
+const gameIdSchema = z.string().regex(GAME_CODE_PATTERN);
+const envelopeSchema = z.object({ type: z.nativeEnum(MessageType), data: z.unknown() }).strict();
+const snapshotSchema = z
+    .object({
+        game: z
+            .object({ id: gameIdSchema, created: z.unknown().optional(), deleted: z.boolean().optional() })
+            .passthrough()
+            .nullable(),
+        gameVersion: gameVersionSchema.nullable(),
+        playerId: z.string().nullable().optional(),
+    })
+    .passthrough();
+interface PendingCommand {
+    id: string;
+    gameId: string;
+    encoded: string;
+    attempts: number;
+    uncertain: boolean;
+    timer?: ReturnType<typeof setTimeout>;
+}
+interface StagedBatch {
+    entry: PendingCommand;
+    baseVersion: GameVersion;
+    commands: { type: MessageType; data: unknown }[];
+}
 export interface SendDataFunction {
     ({ type, data }: { type: MessageType; data?: unknown }): boolean;
 }
@@ -19,6 +51,8 @@ export default function useWebSocket(options: WebSocketOptions) {
     const optionsRef = useRef(options);
     optionsRef.current = options;
     const wsRef = useRef<WebSocket | null>(null);
+    const pending = useRef(new Map<string, PendingCommand>());
+    const staged = useRef<StagedBatch | null>(null);
     const attempts = useRef(0);
     const active = useRef(false);
     const retryTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -28,15 +62,90 @@ export default function useWebSocket(options: WebSocketOptions) {
         clearTimeout(openTimer.current);
     }, []);
     const failed = useCallback(() => {
-        optionsRef.current.dispatch({ type: ActionType.setConnecting, payload: { connecting: false, connectError: true } });
+        optionsRef.current.dispatch({
+            type: ActionType.setConnecting,
+            payload: { connecting: false, connectError: true },
+        });
     }, []);
+    const publish = useCallback((notice?: CommandNotice | null) => {
+        const entries = [...pending.current.values()];
+        const currentNotice = notice === undefined ? optionsRef.current.state.commandNotice : notice;
+        optionsRef.current.dispatch({
+            type: ActionType.setCommandStatus,
+            payload: {
+                pendingCommands: entries.length,
+                saveStatus: entries.length
+                    ? entries.some(entry => entry.uncertain)
+                        ? 'unconfirmed'
+                        : 'pending'
+                    : currentNotice?.kind === 'failed'
+                      ? 'failed'
+                      : 'saved',
+                ...(notice !== undefined ? { commandNotice: notice } : {}),
+            },
+        });
+    }, []);
+    const unconfirmed = useCallback(
+        (message: string) => {
+            if (!pending.current.size) return;
+            for (const entry of pending.current.values()) {
+                clearTimeout(entry.timer);
+                entry.uncertain = true;
+            }
+            publish({ kind: 'unconfirmed', message });
+        },
+        [publish],
+    );
+    const deliver = useCallback(
+        function deliverEntry(entry: PendingCommand): boolean {
+            clearTimeout(entry.timer);
+            const ws = wsRef.current;
+            if (!active.current || !pending.current.has(entry.id)) return false;
+            if (!ws || ws.readyState !== WebSocket.OPEN || entry.attempts >= COMMAND_ATTEMPTS) {
+                entry.uncertain = true;
+                publish({
+                    kind: 'unconfirmed',
+                    message: 'Could not confirm your last change. Check it before making it again.',
+                });
+                return false;
+            }
+            entry.attempts += 1;
+            entry.uncertain = false;
+            publish();
+            try {
+                ws.send(entry.encoded);
+            } catch {
+                entry.uncertain = true;
+                publish({ kind: 'unconfirmed', message: 'The connection closed before your change was confirmed.' });
+                failed();
+                ws.close();
+                return false;
+            }
+            entry.timer = setTimeout(() => {
+                if (!active.current || !pending.current.has(entry.id)) return;
+                entry.uncertain = true;
+                deliverEntry(entry);
+            }, ACK_TIMEOUT);
+            return true;
+        },
+        [publish, failed],
+    );
+
+    const flush = useCallback(() => {
+        const batch = staged.current;
+        staged.current = null;
+        if (batch && pending.current.has(batch.entry.id)) deliver(batch.entry);
+    }, [deliver]);
 
     const connect = useCallback(() => {
         if (!active.current || document.visibilityState !== 'visible') return;
         const current = wsRef.current;
         if (current && (current.readyState === WebSocket.OPEN || current.readyState === WebSocket.CONNECTING)) return;
         clearTimers();
-        if (attempts.current >= RETRY_LIMIT) { failed(); return; }
+        if (attempts.current >= RETRY_LIMIT) {
+            failed();
+            return;
+        }
         attempts.current += 1;
         const { state, dispatch, url } = optionsRef.current;
         dispatch({ type: ActionType.setConnecting, payload: { connecting: true, connectError: false } });
@@ -55,58 +164,226 @@ export default function useWebSocket(options: WebSocketOptions) {
             if (!isCurrent()) return;
             clearTimers();
             attempts.current = 0;
-            optionsRef.current.dispatch({ type: ActionType.setConnecting, payload: { connecting: false, connectError: false } });
+            optionsRef.current.dispatch({
+                type: ActionType.setConnecting,
+                payload: { connecting: false, connectError: false },
+            });
+            for (const entry of pending.current.values()) if (entry.attempts < COMMAND_ATTEMPTS) deliver(entry);
         };
         ws.onmessage = event => {
             if (!isCurrent()) return;
-            const { type, data } = JSON.parse(event.data);
-            if (type === MessageType.BROADCAST_INITIALIZE)
-                optionsRef.current.dispatch({ type: ActionType.setState, payload: data });
-            else if (type === MessageType.BROADCAST_CHANGE)
-                optionsRef.current.dispatch({ type: ActionType.updateState, payload: data });
+            try {
+                const raw: unknown = JSON.parse(event.data);
+                const { type, data } = envelopeSchema.parse(raw);
+                if (type === MessageType.COMMAND_RESULT) {
+                    const reply = commandResultSchema.parse(data);
+                    const entry = pending.current.get(reply.id);
+                    if (!entry) return;
+                    if (entry.gameId !== reply.gameId) throw new Error('Unexpected command reply');
+                    clearTimeout(entry.timer);
+                    if (reply.status === 'unconfirmed') {
+                        entry.uncertain = true;
+                        publish({
+                            kind: 'unconfirmed',
+                            message: reply.message || 'The host could not confirm your last change.',
+                        });
+                        return;
+                    }
+                    pending.current.delete(reply.id);
+                    if (reply.status === 'saved' || reply.status === 'duplicate') {
+                        const notice = optionsRef.current.state.commandNotice;
+                        publish(notice?.kind === 'unconfirmed' && !pending.current.size ? null : undefined);
+                    } else
+                        publish({
+                            kind: 'failed',
+                            message: `Game ${reply.gameId}: ${reply.message || 'Your change was not applied. Review the current game and try again.'}`,
+                        });
+                } else if (type === MessageType.BROADCAST_INITIALIZE || type === MessageType.BROADCAST_CHANGE) {
+                    const snapshot = snapshotSchema.parse(data);
+                    const previous = optionsRef.current.state;
+                    if (
+                        snapshot.game &&
+                        previous.game?.id === snapshot.game.id &&
+                        previous.gameVersion &&
+                        snapshot.gameVersion
+                    ) {
+                        if (
+                            previous.gameVersion.incarnation === snapshot.gameVersion.incarnation &&
+                            snapshot.gameVersion.revision < previous.gameVersion.revision
+                        )
+                            return;
+                        if (
+                            type === MessageType.BROADCAST_CHANGE &&
+                            previous.gameVersion.incarnation !== snapshot.gameVersion.incarnation &&
+                            !snapshot.game.created &&
+                            !snapshot.game.deleted
+                        ) {
+                            ws.send(
+                                JSON.stringify({
+                                    type: MessageType.GAME_LOAD,
+                                    data: { gameId: snapshot.game.id, playerId: previous.playerId },
+                                }),
+                            );
+                            return;
+                        }
+                    }
+                    optionsRef.current.dispatch({
+                        type: type === MessageType.BROADCAST_INITIALIZE ? ActionType.setState : ActionType.updateState,
+                        payload: snapshot,
+                    });
+                } else throw new Error('Unsupported host message');
+            } catch {
+                unconfirmed('The host sent an unsupported reply. Reload the page to update or pair this device again.');
+                optionsRef.current.dispatch({
+                    type: ActionType.setCommandStatus,
+                    payload: {
+                        saveStatus: 'failed',
+                        commandNotice: {
+                            kind: 'failed',
+                            message: 'The host sent an unsupported reply. Reload this page.',
+                        },
+                    },
+                });
+                failed();
+                ws.close(1008, 'Unsupported host reply');
+            }
         };
         ws.onclose = event => {
             if (!isCurrent()) return;
             clearTimers();
             wsRef.current = null;
-            if (event.code === 1008 || event.code === 1011 || attempts.current >= RETRY_LIMIT) { failed(); return; }
+            unconfirmed('The connection closed before your last change was confirmed. Reconnect to check it.');
+            if (event.code === 1008 || event.code === 1011 || attempts.current >= RETRY_LIMIT) {
+                failed();
+                return;
+            }
             if (document.visibilityState === 'visible') retryTimer.current = setTimeout(connect, RETRY_INTERVAL);
         };
         // The close handler owns retrying failures, including rejected handshakes.
         ws.onerror = () => {};
-    }, [clearTimers, failed]);
+    }, [clearTimers, failed, deliver, publish, unconfirmed]);
 
     useEffect(() => {
         active.current = true;
         connect();
-        document.addEventListener('visibilitychange', connect);
+        const visible = () => {
+            if (document.visibilityState !== 'visible') return;
+            const ws = wsRef.current;
+            if (ws?.readyState === WebSocket.OPEN) {
+                const { state } = optionsRef.current;
+                if (state.game)
+                    ws.send(
+                        JSON.stringify({
+                            type: MessageType.GAME_LOAD,
+                            data: { gameId: state.game.id, playerId: state.playerId },
+                        }),
+                    );
+                for (const entry of pending.current.values())
+                    if (entry.uncertain && entry.attempts < COMMAND_ATTEMPTS) deliver(entry);
+            } else connect();
+        };
+        document.addEventListener('visibilitychange', visible);
         return () => {
             active.current = false;
             clearTimers();
+            for (const entry of pending.current.values()) clearTimeout(entry.timer);
+            pending.current.clear();
+            staged.current = null;
             const ws = wsRef.current;
             wsRef.current = null;
             ws?.close();
-            document.removeEventListener('visibilitychange', connect);
+            document.removeEventListener('visibilitychange', visible);
         };
-    }, [connect, clearTimers]);
+    }, [connect, clearTimers, deliver]);
 
     useEffect(() => {
         if (!options.state.reconnect) return;
         attempts.current = 0;
         options.dispatch({ type: ActionType.setConnecting, payload: { reconnect: false } });
-        connect();
-    }, [options.state.reconnect, connect]);
+        for (const entry of pending.current.values()) entry.attempts = 0;
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            for (const entry of pending.current.values()) deliver(entry);
+        } else connect();
+    }, [options.state.reconnect, connect, deliver]);
 
-    const sendData: SendDataFunction = useCallback(({ type, data }) => {
-        const ws = wsRef.current;
-        if (!ws || ws.readyState !== WebSocket.OPEN) { failed(); return false; }
-        try {
-            ws.send(JSON.stringify({ type, data }));
+    const sendData: SendDataFunction = useCallback(
+        ({ type, data }) => {
+            const ws = wsRef.current;
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                failed();
+                return false;
+            }
+            if (type === MessageType.GAME_LOAD) {
+                try {
+                    ws.send(JSON.stringify({ type, data }));
+                    return true;
+                } catch {
+                    failed();
+                    return false;
+                }
+            }
+            const target = z.object({ gameId: gameIdSchema }).passthrough().safeParse(data);
+            const { state } = optionsRef.current;
+            if (
+                !target.success ||
+                !state.gameVersion ||
+                state.game?.id !== target.data.gameId ||
+                (pending.current.size >= MAX_PENDING && !staged.current)
+            ) {
+                publish({
+                    kind: 'failed',
+                    message: 'Wait for the current game and outstanding changes to load, then try again.',
+                });
+                return false;
+            }
+            let batch = staged.current;
+            if (
+                batch &&
+                (batch.entry.gameId !== target.data.gameId ||
+                    batch.baseVersion.incarnation !== state.gameVersion.incarnation ||
+                    batch.baseVersion.revision !== state.gameVersion.revision)
+            ) {
+                flush();
+                batch = null;
+            }
+            if (!batch) {
+                const entry: PendingCommand = {
+                    id: uuidv4(),
+                    gameId: target.data.gameId,
+                    encoded: '',
+                    attempts: 0,
+                    uncertain: false,
+                };
+                batch = { entry, baseVersion: state.gameVersion, commands: [] };
+                staged.current = batch;
+                pending.current.set(entry.id, entry);
+            }
+            try {
+                batch.commands.push({ type, data: structuredClone(data) });
+                batch.entry.encoded = JSON.stringify({
+                    type: MessageType.COMMAND_BATCH,
+                    id: batch.entry.id,
+                    baseVersion: batch.baseVersion,
+                    data: { gameId: batch.entry.gameId, commands: batch.commands },
+                });
+                if (batch.commands.length > 32 || new TextEncoder().encode(batch.entry.encoded).length > 64 * 1024)
+                    throw new Error('Change is too large');
+            } catch {
+                pending.current.delete(batch.entry.id);
+                staged.current = null;
+                publish({
+                    kind: 'failed',
+                    message: 'This change is too large or cannot be sent. Shorten it and try again.',
+                });
+                return false;
+            }
+            const queued = batch;
+            queueMicrotask(() => {
+                if (staged.current === queued) flush();
+            });
             return true;
-        } catch {
-            failed();
-            return false;
-        }
-    }, [failed]);
+        },
+        [failed, flush, publish],
+    );
     return { sendData };
 }

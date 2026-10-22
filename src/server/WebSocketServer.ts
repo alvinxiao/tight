@@ -1,3 +1,6 @@
+import { CommandRejected } from './database/GameStore.js';
+import { createHash } from 'node:crypto';
+import { commandResultSchema, CommandResult } from 'common/commandResult.js';
 import { peerAddress, RateLimit } from './trafficLimits.js';
 import { IncomingMessage, type Server as HttpServer } from 'http';
 import { Duplex } from 'node:stream';
@@ -5,10 +8,10 @@ import { type Server as HttpsServer } from 'https';
 import { WebSocketServer as WSServer, WebSocket as WebSocketType } from 'ws';
 
 import { Session } from 'common/session.js';
-import { MessageType, PartialData } from 'common/message.js';
+import { MessageType } from 'common/message.js';
 import uuidv4 from 'common/uuidv4.js';
 
-import { getGame, getGameForClient, mutateGame } from './database/game.js';
+import { getGame, getGameForClient, getGameVersion, commitGameCommand } from './database/game.js';
 
 import { WebSocket, WebSocketServer, broadcastChangeData, getWebSocketLogId, sendData } from './WebSocket.js';
 import { dirty, getDirtyGameData, isDirty, setDirty } from './dirty.js';
@@ -29,6 +32,24 @@ interface OnConnectionParam {
     request: IncomingMessage;
     sessions: AccessSessions;
     commands: RateLimit;
+}
+
+function snapshot(ws: WebSocket, session: Session): void {
+    const game = ws.gameId ? getGameForClient(ws.gameId) : null;
+    const identity = session.role === 'player' ? session.playerId : session.role === 'host' ? ws.playerId : null;
+    ws.playerId = identity && game?.players.includes(identity) ? identity : null;
+    sendData({
+        ws,
+        type: MessageType.BROADCAST_INITIALIZE,
+        data: {
+            game: game ? visibleGame(game, session) : null,
+            playerId: ws.playerId,
+            gameVersion: game ? getGameVersion(game.id) : null,
+        },
+    });
+}
+function result(ws: WebSocket, data: CommandResult): void {
+    sendData({ ws, type: MessageType.COMMAND_RESULT, data: commandResultSchema.parse(data) });
 }
 
 function onConnection({ wss, ws, request, sessions, commands }: OnConnectionParam) {
@@ -79,61 +100,127 @@ function onConnection({ wss, ws, request, sessions, commands }: OnConnectionPara
             ws.close(1003, 'Text commands required');
             return;
         }
-
-        const result = parseClientMessage(raw.toString());
-        if (result.kind === 'invalid') {
-            ws.close(result.code, result.reason);
+        const parsedMessage = parseClientMessage(raw.toString());
+        if (parsedMessage.kind === 'invalid') {
+            ws.close(parsedMessage.code, parsedMessage.reason);
             return;
         }
-
-        const game = getGame(result.message.data.gameId);
-        let access;
-        try {
-            access = sessions.resolve(ws.accessToken || null);
-        } catch (error) {
-            console.error('Could not verify device access', error);
-            ws.close(1011, 'Could not verify device access');
-            return;
-        }
-        const error = game
-            ? authorizeCommand(access, result.message, game) || validateCommandState(result.message, game)
-            : 'Game not found';
-        if (error) {
-            ws.close(1008, error);
-            return;
-        }
-        const id = result.message.data.gameId;
+        const command = parsedMessage.message;
+        const id = command.data.gameId;
         const previousDirty = structuredClone(dirty.games[id]);
         const previousBinding = { gameId: ws.gameId, playerId: ws.playerId };
-        try {
-            mutateGame(id, () => handleMessage({ wss, ws, message: result.message }));
-        } catch (error) {
+        const restore = () => {
             if (previousDirty) dirty.games[id] = previousDirty;
             else delete dirty.games[id];
             Object.assign(ws, previousBinding);
-            console.error('Could not commit game command', error);
-            ws.close(1011, 'Could not save game. Reconnect and try again.');
+        };
+        let committed = false;
+        try {
+            const access = sessions.resolve(ws.accessToken || null);
+            if (access.role === 'unpaired') {
+                ws.close(1008, 'Pair this device with the host first');
+                return;
+            }
+            if (!mayReadGame(access, id)) {
+                ws.close(1008, 'This device cannot access that game');
+                return;
+            }
+            const game = getGame(id);
+            if (command.type === MessageType.GAME_LOAD) {
+                if (
+                    command.data.playerId &&
+                    access.role !== 'host' &&
+                    (access.role !== 'player' || access.playerId !== command.data.playerId)
+                ) {
+                    ws.close(1008, 'Cannot select another player');
+                    return;
+                }
+                ws.gameId = id;
+                ws.playerId =
+                    access.role === 'player'
+                        ? access.playerId
+                        : access.role === 'host'
+                          ? command.data.playerId || null
+                          : null;
+                snapshot(ws, access);
+                return;
+            }
+            if (!game) {
+                if (ws.gameId === id) snapshot(ws, access);
+                result(ws, { id: command.id, gameId: id, status: 'missing', version: null, message: 'Game not found' });
+                return;
+            }
+            if (command.data.commands.length > 1 && commands.consume(peer, command.data.commands.length - 1)) {
+                ws.close(1008, 'Too many commands. Wait a moment before reconnecting.');
+                return;
+            }
+            const digest = (value: string) => createHash('sha256').update(value).digest('hex');
+            let outcome: ReturnType<typeof commitGameCommand>;
+            try {
+                outcome = commitGameCommand(
+                    id,
+                    {
+                        id: command.id,
+                        version: command.baseVersion,
+                        principal: digest(access.role === 'host' ? 'tight:host-administrator' : ws.accessToken || ''),
+                        payloadHash: digest(JSON.stringify(command)),
+                    },
+                    () => {
+                        for (const message of command.data.commands) {
+                            const error =
+                                authorizeCommand(access, message, game) || validateCommandState(message, game);
+                            if (error) throw new CommandRejected(error);
+                            handleMessage({ wss, ws, message });
+                        }
+                    },
+                );
+            } catch (error) {
+                if (!(error instanceof CommandRejected)) throw error;
+                restore();
+                if (ws.gameId === id) snapshot(ws, access);
+                result(ws, {
+                    id: command.id,
+                    gameId: id,
+                    status: 'rejected',
+                    version: getGameVersion(id),
+                    message: error.message,
+                });
+                return;
+            }
+            committed = outcome.status === 'saved';
+            if (!committed) restore();
+            if (ws.gameId === id) snapshot(ws, access);
+            const message =
+                outcome.status === 'stale'
+                    ? 'The game changed. Review the latest state and try again.'
+                    : outcome.status === 'conflict'
+                      ? 'This command ID was already used for a different change.'
+                      : undefined;
+            result(ws, {
+                id: command.id,
+                gameId: id,
+                status: outcome.status,
+                version: outcome.status === 'missing' ? null : outcome.version,
+                ...(message ? { message } : {}),
+            });
+        } catch (error) {
+            if (!committed) restore();
+            console.error('Could not confirm game command', error);
+            if (command.type !== MessageType.GAME_LOAD)
+                result(ws, {
+                    id: command.id,
+                    gameId: id,
+                    status: 'unconfirmed',
+                    version: null,
+                    message: 'The host could not confirm this change. Check host storage before retrying.',
+                });
+            ws.close(1011, 'Could not confirm game state');
         }
     });
     ws.on('close', () => log(`Closing web socket connection: ${idMsg}`));
 
-    // Maybe use as API token?
-    // const data: PartialData = { socketId: ws.socketId };
-    const data: PartialData = { playerId: null };
-
-    if (ws.gameId) {
-        const game = getGameForClient(ws.gameId);
-        data.game = game ? visibleGame(game, session) : null;
-    }
-
-    const identity = session.role === 'player' ? session.playerId : session.role === 'host' ? playerId : null;
-    if (identity && data.game?.players.includes(identity)) {
-        ws.playerId = identity;
-        data.playerId = identity;
-    }
-
-    // Send initial packet
-    sendData({ ws, type: MessageType.BROADCAST_INITIALIZE, data });
+    ws.playerId = session.role === 'player' ? session.playerId : session.role === 'host' ? playerId || null : null;
+    snapshot(ws, session);
 }
 
 export default function initialize(

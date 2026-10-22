@@ -16,6 +16,8 @@ export function dataDirectory(): string {
     return path.join(process.env.XDG_DATA_HOME || path.join(homedir(), '.local', 'share'), 'tight');
 }
 
+export class CommandRejected extends Error {}
+
 export class StorageError extends Error {
     constructor(cause: unknown) {
         super('Could not save game', { cause });
@@ -300,6 +302,7 @@ export class GameStore {
             return result;
         } catch (cause) {
             if (transaction) this.database.exec('ROLLBACK');
+            if (cause instanceof CommandRejected) throw cause;
             throw new StorageError(cause);
         }
     }

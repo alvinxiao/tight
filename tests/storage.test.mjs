@@ -10,6 +10,7 @@ import { DatabaseSync } from 'node:sqlite';
 import WebSocket from 'ws';
 import ts from 'typescript';
 import { claimHost, withCookie } from './helpers/host-access.mjs';
+import { trackCommands, makeBatch, sendCommand } from './helpers/command-client.mjs';
 
 const source = await readFile(new URL('../src/common/message.ts', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
@@ -50,7 +51,7 @@ async function host(directory, fails = false, port = '0') {
             }));
         },
         async connect(id) {
-            const ws = new WebSocket(`${origin.replace('http:', 'ws:')}/socket?gameId=${id}`, { headers: { cookie } });
+            const ws = trackCommands(new WebSocket(`${origin.replace('http:', 'ws:')}/socket?gameId=${id}`, { headers: { cookie } }));
             const initial = await message(ws);
             return { ws, initial };
         },
@@ -90,7 +91,7 @@ test('durable saves survive crashes, reject competing hosts, and recover failed 
     await host(directory, true);
     const { ws } = await running.connect(id); sockets.push(ws);
     const changed = message(ws, value => value.data?.game?.players?.includes('Saved player'));
-    ws.send(JSON.stringify({ type: T.GAME_ADD_PLAYER, data: { gameId: id, playerId: 'Saved player' } }));
+    await sendCommand(ws, T.GAME_ADD_PLAYER, { gameId: id, playerId: 'Saved player' });
     await changed;
     for (const [type, fields] of [
         [T.GAME_UPDATE_FACTION, { order: 0, name: 'The Arborec', playerIds: ['Saved player'] }],
@@ -100,7 +101,7 @@ test('durable saves survive crashes, reject competing hosts, and recover failed 
         [T.GAME_NEXT_ROUND, {}],
     ]) {
         const broadcast = message(ws, value => value.type === T.BROADCAST_CHANGE);
-        ws.send(JSON.stringify({ type, data: { gameId: id, ...fields } }));
+        await sendCommand(ws, type, { gameId: id, ...fields });
         await broadcast;
     }
     const beforeCrash = await (await running.request(`export?gameId=${id}`)).json();
@@ -135,10 +136,13 @@ test('durable saves survive crashes, reject competing hosts, and recover failed 
     const observed = [];
     observer.ws.on('message', raw => observed.push(JSON.parse(raw)));
     const closed = once(failing.ws, 'close');
-    failing.ws.send(JSON.stringify({ type: T.GAME_ADD_PLAYER, data: { gameId: id, playerId: 'Unsaved player' } }));
+    const failedCommand = makeBatch(failing.ws, [{ type: T.GAME_ADD_PLAYER, data: { gameId: id, playerId: 'Unsaved player' } }]);
+    const failure = message(failing.ws, value => value.type === T.COMMAND_RESULT && value.data.id === failedCommand.id);
+    failing.ws.send(JSON.stringify(failedCommand));
+    assert.equal((await failure).data.status, 'unconfirmed');
     assert.equal((await closed)[0], 1011);
     const stillHealthy = message(observer.ws, value => value.type === T.BROADCAST_CHANGE);
-    observer.ws.send(JSON.stringify({ type: T.GAME_STATUS_SET, data: { gameId: id } }));
+    await sendCommand(observer.ws, T.GAME_STATUS_SET, { gameId: id });
     await stillHealthy;
     assert.equal(observer.ws.readyState, WebSocket.OPEN);
     assert.ok(observed.every(value => !value.data?.game?.players?.includes('Unsaved player')));

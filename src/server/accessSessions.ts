@@ -115,12 +115,6 @@ export function mayReadGame(session: Session, gameId: string): boolean {
 export function authorizeCommand(session: Session, command: ClientCommand, game: Game): string | null {
     if (session.role === 'host') return null;
     if (!mayReadGame(session, game.id)) return 'Pair this device with the host first';
-    if (command.type === MessageType.GAME_LOAD) {
-        if (command.data.factionName) return 'Only the host can assign factions';
-        if (command.data.playerId && (session.role !== 'player' || command.data.playerId !== session.playerId))
-            return 'Cannot select another player';
-        return null;
-    }
     if (session.role !== 'player') return 'Spectators cannot change the game';
     if (command.type === MessageType.GAME_ADD_PLAYER)
         return command.data.playerId === session.playerId ? null : 'Cannot select another player';

@@ -1,3 +1,4 @@
+import { trackCommands, makeBatch, sendBatch, sendCommand } from './helpers/command-client.mjs';
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import { spawn } from 'node:child_process';
@@ -70,6 +71,7 @@ async function connect(id, playerId) {
     if (id) endpoint.searchParams.set('gameId', id);
     if (playerId) endpoint.searchParams.set('playerId', playerId);
     const ws = new WebSocket(endpoint, { headers: { cookie } });
+    trackCommands(ws);
     sockets.add(ws); ws.on('error', () => {}); ws.once('close', () => sockets.delete(ws));
     const initial = await waitMessage(ws, msg => msg.type === T.BROADCAST_INITIALIZE);
     return { ws, game: initial.data.game, playerId: initial.data.playerId };
@@ -77,17 +79,15 @@ async function connect(id, playerId) {
 
 async function snapshot(id, existing) {
     if (existing) {
-        const result = waitMessage(existing, msg => msg.type === T.BROADCAST_CHANGE && msg.data?.game?.created);
+        const result = waitMessage(existing, msg => msg.type === T.BROADCAST_INITIALIZE);
         existing.send(JSON.stringify({ type: T.GAME_LOAD, data: { gameId: id } }));
-        return (await result).data.game.created;
+        return (await result).data.game;
     }
     const { ws, game } = await connect(id); ws.close(); return game;
 }
 async function command(ws, type, data) {
     const changed = waitMessage(ws, msg => msg.type === T.BROADCAST_CHANGE);
-    ws.send(JSON.stringify({ type, data }));
-    // A harmless status command acts as a protocol fence for no-op mutations.
-    ws.send(JSON.stringify({ type: T.GAME_STATUS_SET, data: { gameId: data.gameId } }));
+    await sendBatch(ws, [{ type, data }, { type: T.GAME_STATUS_SET, data: { gameId: data.gameId } }]);
     await changed;
 }
 async function gameTest(t, options = {}) {
@@ -101,8 +101,10 @@ test('round progression respects configured limits of 1, 2, 10, and 20', async t
     for (const limit of [1, 2, 10, 20]) {
         const { id, ws } = await gameTest(t, { numRounds: limit });
         const changed = waitMessage(ws, msg => msg.type === T.BROADCAST_CHANGE);
-        for (let i = 0; i < limit + 2; i++) ws.send(JSON.stringify({ type: T.GAME_NEXT_ROUND, data: { gameId: id } }));
-        ws.send(JSON.stringify({ type: T.GAME_STATUS_SET, data: { gameId: id } }));
+        await sendBatch(ws, [
+            ...Array.from({ length: limit + 2 }, () => ({ type: T.GAME_NEXT_ROUND, data: { gameId: id } })),
+            { type: T.GAME_STATUS_SET, data: { gameId: id } },
+        ]);
         await changed;
         assert.equal((await snapshot(id)).status.round, limit);
     }
@@ -186,9 +188,9 @@ test('binary and oversized messages are bounded without killing a healthy client
     }
     const id = await request('/game/create', {});
     try {
+        const loaded = waitMessage(healthy.ws, msg => msg.type === T.BROADCAST_INITIALIZE && msg.data?.game?.id === id);
         healthy.ws.send(JSON.stringify({ type: T.GAME_LOAD, data: { gameId: id } }));
-        const changed = await waitMessage(healthy.ws, msg => msg.data?.game?.created?.id === id);
-        assert.equal(changed.data.game.created.id, id);
+        assert.equal((await loaded).data.game.id, id);
     } finally { healthy.ws.close(); await request('/game/delete', { id }); }
 });
 
@@ -260,10 +262,17 @@ test('invalid commands cannot crash the host, overwrite state, or reference miss
         [T.GAME_ADD_PLAYER, { playerId: 'constructor' }], [T.GAME_ADD_PLAYER, { playerId: 'x'.repeat(81) }],
     ]) {
         const offender = await connect(id);
-        const closed = once(offender.ws, 'close');
-        offender.ws.send(JSON.stringify({ type, data: { gameId: id, ...fields } }));
-        const [code] = await closed;
-        assert.equal(code, 1008, `Command ${T[type]} ${JSON.stringify(fields)}`);
+        const rejected = new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('Expected command rejection')), 3000);
+            offender.ws.once('close', code => { clearTimeout(timer); resolve(code === 1008); });
+            offender.ws.on('message', raw => {
+                const packet = JSON.parse(raw);
+                if (packet.type === T.COMMAND_RESULT) { clearTimeout(timer); resolve(packet.data.status === 'rejected'); }
+            });
+        });
+        offender.ws.send(JSON.stringify(makeBatch(offender.ws, [{ type, data: { gameId: id, ...fields } }])));
+        assert.equal(await rejected, true, `Command ${T[type]} ${JSON.stringify(fields)}`);
+        offender.ws.close();
         assert.equal(server.exitCode, null);
         assert.deepEqual(await snapshot(id, ws), before);
     }
@@ -284,7 +293,8 @@ test('sparse scored-objective arrays normalize safely and nested valid updates s
 test('invalid handshake queries close without creating a player or crashing the host', async () => {
     for (const query of ['gameId[]=ABCD', 'gameId=ABCD&gameId=EFGH', 'playerId=constructor', 'unknown=field']) {
         const ws = new WebSocket(origin.replace('http:', 'ws:') + '/socket?' + query, { headers: { cookie } });
-        sockets.add(ws); ws.on('error', () => {}); ws.once('close', () => sockets.delete(ws));
+        trackCommands(ws);
+    sockets.add(ws); ws.on('error', () => {}); ws.once('close', () => sockets.delete(ws));
         const [code] = await once(ws, 'close');
         assert.equal(code, 1008);
         assert.equal(server.exitCode, null);

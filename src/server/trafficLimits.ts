@@ -12,7 +12,7 @@ export class RateLimit {
     ) {}
 
     /** Zero means accepted; otherwise return the whole seconds until another attempt is allowed. */
-    consume(peer: string): number {
+    consume(peer: string, cost = 1): number {
         const now = this.now();
         let bucket = this.peers.get(peer);
         if (!bucket) {
@@ -28,8 +28,8 @@ export class RateLimit {
             bucket.tokens + (Math.max(0, now - bucket.updated) / 1000) * this.refillPerSecond,
         );
         bucket.updated = Math.max(now, bucket.updated);
-        if (bucket.tokens < 1) return Math.ceil((1 - bucket.tokens) / this.refillPerSecond);
-        bucket.tokens -= 1;
+        if (bucket.tokens < cost) return Math.ceil((cost - bucket.tokens) / this.refillPerSecond);
+        bucket.tokens -= cost;
         return 0;
     }
 }

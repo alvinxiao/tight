@@ -20,7 +20,8 @@ import { Planets } from './planet/index.js';
 import { GameCreateParams, GameRestartParams } from 'common/api.js';
 import { generateGameCode } from '../utils/game.js';
 
-import { GameStore } from './GameStore.js';
+import { GameStore, CommandIdentity, CommandCommit } from './GameStore.js';
+import { GameVersion } from 'common/gameVersion.js';
 import { GuestSession } from 'common/session.js';
 
 let store: GameStore | null = null;
@@ -29,8 +30,13 @@ let _games: GameMap = {};
 export function initializeGameStorage(directory: string): void {
     if (store) throw new Error('Game storage is already initialized');
     const next = new GameStore(directory);
-    try { _games = next.load(); store = next; }
-    catch (error) { next.close(); throw error; }
+    try {
+        _games = next.load();
+        store = next;
+    } catch (error) {
+        next.close();
+        throw error;
+    }
 }
 export function closeGameStorage(): void {
     store?.close();
@@ -50,6 +56,27 @@ export function findAccessSession(hash: string): GuestSession | null {
 }
 export function saveAccessSession(hash: string, session: GuestSession): void {
     storage().saveAccessSession(hash, session);
+}
+
+export function getGameVersion(id: string): GameVersion | null {
+    return storage().version(id);
+}
+
+export function commitGameCommand(id: string, identity: CommandIdentity, change: () => void): CommandCommit {
+    const game = _games[id];
+    if (!game) return { status: 'missing' };
+    const previous = structuredClone(game);
+    try {
+        const result = storage().commitCommand(id, identity, () => {
+            change();
+            return _games[id];
+        });
+        if (result.status === 'saved') _games[id] = result.game;
+        return result;
+    } catch (error) {
+        _games[id] = previous;
+        throw error;
+    }
 }
 
 export function mutateGame(id: string, change: () => void): void {

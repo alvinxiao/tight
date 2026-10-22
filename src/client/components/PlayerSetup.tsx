@@ -1,5 +1,5 @@
 import { Button, CircularProgress, Grid, Toolbar, Typography } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 
 import { GameClientData } from 'common/Game';
 import { MessageType } from 'common/message';
@@ -31,37 +31,24 @@ function canStart(game: GameClientData): boolean {
 }
 
 function PlayerSetup() {
-    const { sendData } = useAppContext();
+    const {
+        sendData,
+        state: { pendingCommands },
+    } = useAppContext();
     const { gameId, game, playerId, isHost } = useGameInfo();
 
-    const [pending, setPending] = useState(false);
-
-    useEffect(() => {
-        if (!pending || !game) {
-            return;
-        }
-
-        if (game.status.started) {
-            // Reset pending when game has started
-            setPending(false);
-        }
-    });
+    const pending = pendingCommands > 0;
 
     if (!game) {
         return null;
     }
 
     const onStartClick = () => {
-        const start = !pending;
-        setPending(!pending);
-
-        if (start) {
-            const speaker = game.factions[0].name;
-            const pickOrder = game.factions.map(f => f.name);
-            sendData({ type: MessageType.GAME_STATUS_SET, data: { gameId, pickOrder, speaker } });
-        }
-
-        sendData({ type: start ? MessageType.START_GAME : MessageType.STOP_GAME, data: { gameId } });
+        if (pending) return;
+        const speaker = game.factions[0].name;
+        const pickOrder = game.factions.map(f => f.name);
+        sendData({ type: MessageType.GAME_STATUS_SET, data: { gameId, pickOrder, speaker } });
+        sendData({ type: MessageType.START_GAME, data: { gameId } });
     };
 
     const isSpectator = !isHost;
@@ -80,7 +67,7 @@ function PlayerSetup() {
                     <Grid container justifyContent="flex-end" alignItems="center" spacing={1}>
                         {pending ? (
                             <Grid item>
-                                <CircularProgress aria-label="Starting game" size={24} />
+                                <CircularProgress aria-label="Saving changes" size={24} />
                             </Grid>
                         ) : null}
                         <Grid item>
@@ -96,7 +83,7 @@ function PlayerSetup() {
                     </Grid>
                 </Grid>
             </Toolbar>
-            {!pending ? <FactionsSetup /> : null}
+            <FactionsSetup />
         </>
     );
 }

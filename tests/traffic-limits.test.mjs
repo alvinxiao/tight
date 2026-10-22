@@ -7,6 +7,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import WebSocket from 'ws';
 import { MessageType as T } from './helpers/message-types.mjs';
+import { trackCommands, makeBatch } from './helpers/command-client.mjs';
 process.env.TIGHT_USE_HTTP = 'true';
 const { startBackend } = await import('../build/backend.js');
 const source = await readFile(new URL('../src/server/trafficLimits.ts', import.meta.url), 'utf8');
@@ -37,6 +38,18 @@ test('peer allowances refill with time, retain depleted peers, and bound new-pee
     assert.equal(limit.consume('third'), 1);
 });
 
+test('a batch spends one allowance per inner command without partially spending a rejected batch', () => {
+    let now = 0;
+    const limit = new RateLimit(60, 10, 1, () => now);
+    assert.equal(limit.consume('device', 32), 0);
+    assert.equal(limit.consume('device', 32), 1);
+    assert.equal(limit.consume('device', 28), 0);
+    assert.equal(limit.consume('device'), 1);
+    now = 3200;
+    assert.equal(limit.consume('device', 32), 0);
+    assert.equal(limit.consume('device'), 1);
+});
+
 async function host(t) {
     const directory = await mkdtemp(path.join(tmpdir(), 'tight-limits-'));
     const backend = await startBackend({ host: '127.0.0.1', port: 0, dataDirectory: directory });
@@ -54,10 +67,10 @@ async function host(t) {
             signal: AbortSignal.timeout(3000),
         });
     const open = async (query = '') => {
-        const ws = new WebSocket(backend.origin.replace('http:', 'ws:') + '/' + query, { headers: { cookie } });
+        const ws = trackCommands(new WebSocket(backend.origin.replace('http:', 'ws:') + '/' + query, { headers: { cookie } }));
         sockets.push(ws);
         ws.on('error', () => {});
-        await once(ws, 'open');
+        await once(ws, 'message');
         return ws;
     };
     const reject = (headers = { cookie }) =>
@@ -106,7 +119,10 @@ test('HTTP and pairing limits reject bursts before parsing and ignore forwarded-
         assert.equal(response.status, 200);
     }
     assert.equal(response.status, 429);
-    assert.equal((await api('session', undefined, { 'X-Forwarded-For': '203.0.113.5' })).status, 429);
+    const spoofed = await Promise.all(Array.from({ length: 16 }, (_, index) =>
+        api('session', undefined, { 'X-Forwarded-For': `203.0.113.${index}` }),
+    ));
+    assert.ok(spoofed.some(reply => reply.status === 429), 'changing forwarded addresses must not grant each request a fresh allowance');
     assert.match((await response.json()).error, /Wait a moment/);
 });
 
@@ -128,13 +144,13 @@ test('connection slots release on close and command or handshake floods do not r
     const exhaustedAt = performance.now();
     const reconnected = await open(`?gameId=${id}`);
     const again = once(reconnected, 'close');
-    for (let index = 0; index < 100; index++)
-        reconnected.send(
-            JSON.stringify({
-                type: T.GAME_ADD_PLAYER,
-                data: { gameId: id, playerId: `Retry ${index}` },
-            }),
-        );
+    const batches = Array.from({ length: 2 }, (_, batch) => makeBatch(reconnected,
+        Array.from({ length: 32 }, (_, index) => ({
+            type: T.GAME_ADD_PLAYER,
+            data: { gameId: id, playerId: `Retry ${batch * 32 + index}` },
+        })),
+    ));
+    for (const batch of batches) reconnected.send(JSON.stringify(batch));
     assert.equal((await again)[0], 1008);
     const saved = await (await api(`game/export?gameId=${id}`)).json();
     assert.ok(

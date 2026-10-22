@@ -152,7 +152,19 @@ test('desktop shares on a selected adapter, generates usable QR invitations, and
         await expect(page.getByRole('textbox', { name: 'Lobby address', exact: true })).toHaveValue(address);
         expect(new URL(page.url()).origin).toBe(localOrigin);
         async function decode(label: string) {
-            const picture = PNG.sync.read(await page.getByRole('img', { name: label, exact: true }).screenshot());
+            const qr = page.getByRole('img', { name: label, exact: true });
+            await expect(qr).toBeVisible();
+            await expect
+                .poll(() =>
+                    qr.evaluate(element => {
+                        const code = element.getBoundingClientRect();
+                        const container = element.parentElement?.getBoundingClientRect();
+                        if (!container) throw new Error('Missing QR container');
+                        return Math.abs(code.x + code.width / 2 - container.x - container.width / 2);
+                    }),
+                )
+                .toBeLessThan(1);
+            const picture = PNG.sync.read(await qr.screenshot());
             const reader: unknown = require('jsqr');
             if (typeof reader !== 'function') throw new Error('Missing QR decoder');
             const decoded: unknown = reader(new Uint8ClampedArray(picture.data), picture.width, picture.height);
@@ -173,6 +185,7 @@ test('desktop shares on a selected adapter, generates usable QR invitations, and
         await page.getByRole('textbox', { name: 'Player name', exact: true }).fill('QR player');
         await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
         const invitation = await decode('Player invitation QR code');
+        await page.screenshot({ path: testInfo.outputPath('invitation.png') });
         expect(new URL(invitation).origin).toBe(address);
         const hostCookie = (await page.context().cookies()).find(cookie => cookie.name === 'tight-session');
         expect(hostCookie).toBeDefined();

@@ -1,17 +1,36 @@
 # Command confirmation and concurrent edits
 
-Issue #12 needs a durable command identity as well as a connection retry button. A command will carry a UUID, the game incarnation UUID and revision it was based on, and its validated payload. The game incarnation prevents an old command from affecting a deleted and later reused game code. The host has a stable administrative principal; a paired device uses its persisted credential digest as its principal.
+Every mutation travels in a `COMMAND_BATCH` envelope. It contains a UUID, the game's incarnation UUID and revision, and between 1 and 32 validated commands for that game. The host derives the principal from the authorized session and hashes the validated envelope. The browser cannot supply either digest. Host administration has a stable principal across backend restarts; paired devices use their persisted credential digest.
 
-The `GameStore.commitCommand` storage API checks for a receipt before invoking the mutation callback. Repeating the same principal, command UUID, and payload returns its committed result. Reusing the UUID with a different payload is rejected. A command based on another incarnation or an older revision is rejected without mutation. The UI must show that rejection and replace its view with the current authorized snapshot; it must not silently rebase an old edit.
+The client groups synchronous commands from one interaction into one transaction. Starting a game can set its initial status and start it atomically. Transferring planets can remove and acquire ownership together. Each inner command counts toward the existing per-address traffic limit. An envelope is limited to 64 KiB.
 
-A transaction commits the candidate snapshot, its next revision, and its receipt together. No-op commands can keep the revision but still receive a receipt. A failed write rolls back both state and receipt, and the in-memory owner restores its previous state. Acknowledgment is sent only after commit. Other clients receive versioned broadcasts, and reconnect starts with a full authorized snapshot.
+`GAME_LOAD` is a read-only subscription request. It selects an authorized game and an already registered identity and returns a full snapshot. It never registers a player, assigns a faction, or advances the game revision. Registration uses an acknowledged mutation; claiming a player invitation registers that approved identity on the host.
 
-Receipts are bounded to the most recent 2,000 per game and 10,000 overall. A pruned command that changed state still has an old revision and cannot apply twice. If a pruned no-op is repeated without an intervening state change, it remains a no-op. Revisions never reset while a game exists, including restart; a newly created or imported game receives a new incarnation.
+## Save and acknowledgment
 
-The client will retain each outstanding command's original ID, payload, and base revision for bounded retry after reconnect. It will not mint another ID or change the expected revision when retrying. Timeouts and disconnections must distinguish an unconfirmed action from one that was rejected. Pending, saved, disconnected, and failed states belong in the interface.
+`GameStore.commitCommand` checks for a receipt before invoking the mutation callback. Repeating the same principal, command UUID, and payload returns `duplicate`, including when the completed action would now fail domain validation. Reusing that UUID with another payload returns `conflict`. A command based on another incarnation or an older revision returns `stale` without mutation.
 
-## Implementation sequence
+One SQLite transaction commits the candidate snapshot, revision, and receipt. Each inner command is checked against the state produced by the preceding command. Any permission or domain rejection rolls back the whole batch, its in-memory changes, socket identity changes, and pending broadcast flags. No-op batches can keep their revision and still receive a receipt. A failed storage write rolls back state and receipt.
 
-The SQLite revision and receipt transaction is implemented, with migration backups and crash/rollback tests. Existing saves advance their revision when their stored snapshot changes; unchanged saves retain it. Game metadata and receipts stay outside the portable game export. The backend library exports GameStore for storage adapters; its owner must load and validate the store before use and restore any in-memory mutations when a commit throws.
+The server sends a full authorized snapshot and then `COMMAND_RESULT` after commit. Other subscribers receive versioned change broadcasts. Results identify the command and game and use these statuses:
 
-Next connect the validated wire envelope and acknowledgment to that transaction, update the client and integration helpers, and add concurrent-editor, duplicate, reconnect, and lost-response regressions. The trusted adapter must derive the principal from the current authorized session and hash the validated command; the browser must never supply either digest. Until that step ships, existing WebSocket messages still use the earlier unacknowledged protocol; the storage foundation alone does not close #12.
+- `saved` confirms a committed transaction.
+- `duplicate` confirms that the identical transaction already committed.
+- `stale`, `conflict`, `rejected`, and `missing` confirm that this attempt did not apply a change.
+- `unconfirmed` means the host could not provide a trustworthy outcome. The connection closes with 1011 and storage needs attention.
+
+Current authorization is checked before receipt lookup. Revoked credentials cannot retrieve a receipt or game snapshot. Reconnect begins with a full authorized snapshot. The client ignores older revisions from the same incarnation and requests a full snapshot when a change references another incarnation.
+
+## Retry and recovery
+
+The client retains up to 32 outstanding batches in memory. Each retains its original encoded bytes, ID, and base revision. After a 10-second acknowledgment timeout it retries those exact bytes, up to three deliveries. Reconnect also uses the same bytes and remaining attempts. It never silently rebases a stale edit or creates a replacement ID during retry.
+
+The header shows Saving, Saved, Unconfirmed, or Not saved. Rejections show a dismissible message. An unconfirmed change keeps its pending identity and provides **Check last change**, which grants another bounded set of deliveries using that same identity. Controls that depend on the outstanding change wait for its confirmation. Connection recovery remains separately bounded to five attempts with a three-second interval.
+
+Outstanding payloads are not written to browser storage. Closing or reloading a page discards them. After reloading, review the current game before repeating an uncertain action. A backend restart preserves committed receipts; a browser restart does not preserve unconfirmed local requests.
+
+Receipts retain the most recent 2,000 per game and 10,000 overall. A pruned command that changed state has an old revision and cannot apply twice. If a pruned no-op is repeated without an intervening state change, it remains a no-op. Revisions never reset while a game exists, including game restart; a newly created or imported game receives a new incarnation. Metadata and receipts stay outside portable game exports.
+
+## Verification
+
+Run `npm test` for real-client concurrency, duplicate, conflict, lost-response replay, rollback, restart, receipt-write failure, and reused-game-code tests. Run `npm run test:browser` for the host and phone journey and acknowledgment fault injection. The desktop suite decodes both rendered QR codes and checks their centers against the dialog's content stack. Physical Windows and phone qualification remains a separate release gate.

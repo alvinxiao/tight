@@ -21,7 +21,10 @@ interface FactionsSetupProps {
 }
 
 function FactionsSetup(props: FactionsSetupProps) {
-    const { sendData } = useAppContext();
+    const {
+        sendData,
+        state: { pendingCommands },
+    } = useAppContext();
     const { game, gameId, isHost } = useGameInfo();
     const { factions, players } = game || {};
     const { disableFactionSelect, disableColorNone, disableReordering } = props;
@@ -96,7 +99,7 @@ function FactionsSetup(props: FactionsSetupProps) {
                                     'aria-label': `Position for player slot ${i + 1}`,
                                     sx: { paddingLeft: '4px' },
                                 }}
-                                disabled={disableReordering}
+                                disabled={disableReordering || pendingCommands > 0}
                             >
                                 {playerOrderOptions.map(o => (
                                     <MenuItem key={o.value} value={o.value}>
@@ -114,7 +117,7 @@ function FactionsSetup(props: FactionsSetupProps) {
                             }}
                         >
                             <FactionSelect
-                                disabled={disableFactionSelect}
+                                disabled={disableFactionSelect || pendingCommands > 0}
                                 sx={{ marginBottom: 1 }}
                                 order={i}
                                 factionNames={factionNames}
@@ -122,6 +125,7 @@ function FactionsSetup(props: FactionsSetupProps) {
                                 onChange={name => onFactionChange(i, name)}
                             />
                             <ColorSelect
+                                disabled={pendingCommands > 0}
                                 sx={{ marginBottom: 1 }}
                                 order={i}
                                 value={color}
@@ -129,6 +133,7 @@ function FactionsSetup(props: FactionsSetupProps) {
                                 disableNone={disableColorNone}
                             />
                             <PlayerSelect
+                                disabled={pendingCommands > 0}
                                 playerNames={players || []}
                                 value={playerIds}
                                 onChange={player => onPlayerChange(i, player)}

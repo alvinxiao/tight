@@ -19,7 +19,7 @@ import { formatChangePlanets, markGameDirty } from './dirty.js';
 import { logWS } from './log.js';
 import { WebSocketServer, WebSocket, getWebSocketLogId } from './WebSocket.js';
 
-function addPlayer(ws: WebSocket, game: Game, playerId: string | null, factionName?: string | null) {
+function addPlayer(ws: WebSocket, game: Game, playerId: string | null) {
     if (!playerId) {
         return;
     }
@@ -27,21 +27,13 @@ function addPlayer(ws: WebSocket, game: Game, playerId: string | null, factionNa
     ws.playerId = playerId;
 
     let players = false;
-    let factions = false;
 
     if (!game.players[playerId]) {
         game.players[playerId] = { id: playerId };
         players = true;
     }
 
-    const faction = game.factions.find(f => f.name === factionName);
-    if (faction && !faction?.playerIds.includes(playerId)) {
-        faction.playerIds.push(playerId);
-        faction.playerIds.sort();
-        factions = true;
-    }
-
-    markGameDirty(game.id, { factions, players });
+    markGameDirty(game.id, { players });
 }
 
 export interface handleMessageParams {
@@ -66,21 +58,10 @@ export default function handleMessage({ wss, ws, message }: handleMessageParams)
     }
 
     switch (type) {
-        case MessageType.GAME_LOAD: {
-            ws.gameId = gameId;
-            markGameDirty(gameId, { created: true });
-
-            const { playerId } = data;
-            if (playerId) {
-                addPlayer(ws, game, playerId, requestedFactionName);
-            }
-            break;
-        }
-
         case MessageType.GAME_ADD_PLAYER: {
             const { playerId } = data;
             if (playerId) {
-                addPlayer(ws, game, playerId, requestedFactionName);
+                addPlayer(ws, game, playerId);
             }
             break;
         }
