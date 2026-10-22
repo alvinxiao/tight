@@ -1,7 +1,7 @@
 import React, { ElementType, ReactElement, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 
-import { CircularProgress, Grid } from '@mui/material';
+import { Button, CircularProgress, Grid, Typography } from '@mui/material';
 
 import { MessageType } from 'common/message';
 
@@ -21,6 +21,8 @@ export interface GameWrapperProps {
  */
 export default function GameWrapper(props: GameWrapperProps): ReactElement {
     const [gameLoaded, setGameLoaded] = useState(false);
+    const [loadError, setLoadError] = useState(false);
+    const [loadAttempt, setLoadAttempt] = useState(0);
 
     const {
         state: { initialized },
@@ -40,7 +42,7 @@ export default function GameWrapper(props: GameWrapperProps): ReactElement {
     const { Page } = props;
 
     const sessionGameId = sessionStorage.getItem('gameId');
-    const gameIdToLoad = gameIdParam || sessionGameId;
+    const gameIdToLoad = gameIdParam;
     const pathnameLowerCase = pathname.toLowerCase();
     const isGamePage = gameIdToLoad ? pathnameLowerCase.includes(gameIdToLoad.toLowerCase()) : false;
     const isStatusPage = isGamePage && pathnameLowerCase.includes('/status');
@@ -64,38 +66,36 @@ export default function GameWrapper(props: GameWrapperProps): ReactElement {
         }
 
         if (gameIdToLoad === gameId) {
+            setLoadError(false);
             setGameLoaded(true);
             return;
         }
 
-        // Need to load the game
         setGameLoaded(false);
-        api.gameValidate({ gameId: gameIdToLoad }).then(exists => {
-            if (exists) {
-                // Handle page refresh.
-                // If same game, use same player ID if exists.
-                // If different game, clear player ID so it'll bring up the player select dialog.
-                if (sessionGameId !== gameIdToLoad) {
-                    sessionStorage.setItem('gameId', gameIdToLoad || '');
-                    dispatch({ type: ActionType.setPlayerId, payload: '' });
+        setLoadError(false);
+        let cancelled = false;
+        api.gameValidate({ gameId: gameIdToLoad })
+            .then(exists => {
+                if (cancelled) return;
+                if (exists) {
+                    const nextPlayerId =
+                        sessionGameId === gameIdToLoad ? sessionStorage.getItem('playerId') || null : null;
+                    sessionStorage.setItem('gameId', gameIdToLoad);
+                    if (playerId !== nextPlayerId) dispatch({ type: ActionType.setPlayerId, payload: nextPlayerId });
+                    sendData({ type: MessageType.GAME_LOAD, data: { gameId: gameIdToLoad, playerId: nextPlayerId } });
+                } else {
+                    sessionStorage.removeItem('gameId');
+                    sessionStorage.removeItem('playerId');
+                    navigate(`/${gameIdToLoad}/deleted`);
                 }
-
-                const sessionPlayerId = sessionStorage.getItem('playerId');
-                if (playerId !== sessionPlayerId) {
-                    dispatch({ type: ActionType.setPlayerId, payload: playerId });
-                }
-
-                sendData({
-                    type: MessageType.GAME_LOAD,
-                    data: { gameId: gameIdToLoad, playerId },
-                });
-            } else {
-                sessionStorage.setItem('gameId', '');
-                sessionStorage.setItem('playerId', '');
-                navigate(`/${gameIdToLoad}/deleted`);
-            }
-        });
-    }, [initialized, gameIdToLoad, gameId, playerId]);
+            })
+            .catch(() => {
+                if (!cancelled) setLoadError(true);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [initialized, gameIdToLoad, gameId, playerId, loadAttempt]);
 
     useEffect(() => {
         // Ensure local state is synced to the game loaded status
@@ -116,9 +116,18 @@ export default function GameWrapper(props: GameWrapperProps): ReactElement {
         }
     }, [pathname]);
 
+    if (gameIdToLoad && loadError) {
+        return (
+            <Grid container direction="column" alignItems="center" sx={{ p: 3 }}>
+                <Typography role="alert">Could not load this game. Check the host connection and try again.</Typography>
+                <Button onClick={() => setLoadAttempt(value => value + 1)}>Retry loading game</Button>
+            </Grid>
+        );
+    }
+
     // Wait until the app is initialized, strategy cards are fetched, and
     // if there is an active game, it is fully loaded.
-    if (!initialized || !strategyCardsLoaded || (gameIdToLoad && !gameLoaded)) {
+    if (!initialized || !strategyCardsLoaded || (gameIdToLoad && (!gameLoaded || gameId !== gameIdToLoad))) {
         return (
             <Grid sx={{ height: '100%' }} container justifyContent="center" alignItems="center" direction="column">
                 <CircularProgress size="50vw" />
