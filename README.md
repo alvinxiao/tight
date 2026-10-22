@@ -59,7 +59,7 @@ The suite covers malformed WebSocket framing, payload limits, configured round l
 
 # Production-readiness work
 
-See [the backlog](docs/production-readiness.md), [GitHub issue links](docs/readiness-issues.json), and [the Windows desktop design](docs/desktop-design.md). Games now persist in a per-user SQLite database. Permissions and full game-rule enforcement are incomplete, and Electron packaging has not started. These first fixes do not make the application production ready.
+See [the backlog](docs/production-readiness.md), [GitHub issue links](docs/readiness-issues.json), and [the Windows desktop design](docs/desktop-design.md). Games now persist in a per-user SQLite database. Permissions and full game-rule enforcement are incomplete, and A local-only Electron preview is available; Wi-Fi hosting and signed installation remain pending. These first fixes do not make the application production ready.
 
 ## Request validation
 
@@ -78,3 +78,7 @@ In this cloud environment, use the installed system browser without downloading 
 ## Saved games
 
 Games survive backend restarts and no longer expire after four hours. See [storage and recovery](docs/game-storage.md) for data locations, backups, export/import, and failure behavior. Set `TIGHT_DATA_DIR=/workspace/.tight-data` when developing in this cloud workspace. The home screen lists saved games with resume, export, import, and confirmed deletion. Player identity across browser sessions and host permissions remain pending.
+
+## Windows desktop preview
+
+See [the desktop guide](docs/windows-desktop.md) for the preview artifact, development commands, storage, and validation limits. The launcher manages its own backend and requires no separate Node installation for users.

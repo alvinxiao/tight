@@ -24,8 +24,6 @@ interface OnConnectionParam {
     request: IncomingMessage;
 }
 
-let wss: WebSocketServer;
-
 function onConnection({ wss, ws, request }: OnConnectionParam) {
     ws.on('error', () => log('Web socket connection error'));
     let query: URLSearchParams;
@@ -104,15 +102,12 @@ function onConnection({ wss, ws, request }: OnConnectionParam) {
 }
 
 export default function initialize(server: HttpServer | HttpsServer) {
-    if (wss) {
-        return wss;
-    }
-
-    wss = new WSServer({ server, maxPayload: 64 * 1024 });
+    const wss = new WSServer({ server, maxPayload: 64 * 1024 });
+    wss.on('error', () => log('WebSocket server error'));
     wss.on('connection', (ws: WebSocket, request: IncomingMessage) => onConnection({ wss, ws, request }));
 
     // Keep connections alive
-    setInterval(() => {
+    const heartbeat = setInterval(() => {
         if (!wss) {
             return;
         }
@@ -131,7 +126,7 @@ export default function initialize(server: HttpServer | HttpsServer) {
     }, KEEP_ALIVE_INTERVAL);
 
     // Broadcast changes on an interval
-    setInterval(() => {
+    const broadcasts = setInterval(() => {
         if (!isDirty()) {
             // Nothing changed, don't broadcast.
             return;
@@ -145,5 +140,13 @@ export default function initialize(server: HttpServer | HttpsServer) {
         }
     }, BROADCAST_INTERVAL);
 
-    return wss;
+    let stopped: Promise<void> | undefined;
+    return {
+        stop: () => stopped ??= new Promise<void>(resolve => {
+            clearInterval(heartbeat);
+            clearInterval(broadcasts);
+            wss.clients.forEach(client => client.terminate());
+            wss.close(() => resolve());
+        }),
+    };
 }

@@ -2,11 +2,11 @@
 
 A user installs TIGHT, opens it from Start Menu, selects Host game, and scans the displayed QR code with a phone. The phone opens its normal browser. The PC stores the game and continues hosting until the user ends the session. Resume game restores a saved game after restarting the PC.
 
-This is the proposed implementation shape. No Electron shell or Windows installer has been built in this review.
+The first Electron launcher and portable Windows packaging are implemented. See [the desktop preview](windows-desktop.md) for the implemented flow and its validation limits. LAN controls, an installer, signing, and the remaining release work below are still planned.
 
 ## What exists today
 
-The React UI calls same-origin HTTP APIs and maintains a WebSocket for state updates. Express serves the production UI and API. The WebSocket handler mutates a process-global game map, and a 300 ms timer broadcasts dirty portions to subscribed clients. All durable-looking game data is actually in RAM. The short game code locates a game on one particular backend; it does not locate a host PC across a network.
+The React UI calls same-origin HTTP APIs and maintains a WebSocket for state updates. Express serves the production UI and API. The WebSocket handler mutates a cached game map, and a 300 ms timer broadcasts dirty portions to subscribed clients. The backend now commits games to a per-user SQLite store before success or broadcast. The short game code locates a game on one particular backend; it does not locate a host PC across a network.
 
 The useful existing split is client/server/common. Keep it. Introduce clear ownership inside those boundaries before adding the desktop runtime.
 

@@ -46,6 +46,9 @@ export class GameStore {
             throw error;
         }
     }
+    close(): void {
+        this.database.close();
+    }
     load(): GameMap {
         const games: GameMap = {};
         for (const raw of this.database.prepare('SELECT id, snapshot FROM games').all()) {

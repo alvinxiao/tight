@@ -5,6 +5,7 @@ import { once } from 'node:events';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { createServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import WebSocket from 'ws';
 import ts from 'typescript';
@@ -13,9 +14,9 @@ const source = await readFile(new URL('../src/common/message.ts', import.meta.ur
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
 const { MessageType: T } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 
-async function host(directory, fails = false) {
+async function host(directory, fails = false, port = '0') {
     const child = spawn(process.execPath, ['build/server.js'], {
-        env: { ...process.env, TIGHT_DATA_DIR: directory, TIGHT_USE_HTTP: 'true', PORT: '0' },
+        env: { ...process.env, TIGHT_DATA_DIR: directory, TIGHT_USE_HTTP: 'true', TIGHT_HOST: '127.0.0.1', PORT: port },
         stdio: ['ignore', 'pipe', 'pipe'],
     });
     let logs = '';
@@ -175,4 +176,22 @@ test('unsupported database versions and malformed saved games fail without erasi
     const invalid = await readFile(filename);
     await host(directory, true);
     assert.deepEqual(await readFile(filename), invalid);
+});
+
+
+test('a failed bind releases timers and storage so the host can be started again', async t => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'tight-bind-'));
+    const occupied = createServer();
+    let running;
+    t.after(async () => {
+        await running?.stop();
+        if (occupied.listening) await new Promise(resolve => occupied.close(resolve));
+        await rm(directory, { recursive: true, force: true });
+    });
+    await new Promise(resolve => occupied.listen(0, '127.0.0.1', resolve));
+    const address = occupied.address();
+    if (!address || typeof address === 'string') throw new Error('Expected TCP address');
+    await host(directory, true, String(address.port));
+    running = await host(directory);
+    assert.equal((await running.request('create', {})).status, 200);
 });
