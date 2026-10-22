@@ -1,4 +1,5 @@
 import { IncomingMessage, type Server as HttpServer } from 'http';
+import { Duplex } from 'node:stream';
 import { type Server as HttpsServer } from 'https';
 import { WebSocketServer as WSServer, WebSocket as WebSocketType } from 'ws';
 
@@ -133,7 +134,7 @@ export default function initialize(
     sessions: AccessSessions,
 ) {
     const wss = new WSServer({
-        server,
+        noServer: true,
         maxPayload: 64 * 1024,
         verifyClient: (info, done) => {
             const rejection = verifyRequest(info.req);
@@ -150,6 +151,29 @@ export default function initialize(
             }
         },
     });
+    const owners = new WeakMap<WebSocketType, HttpServer | HttpsServer>();
+    const attachments = new Map<
+        HttpServer | HttpsServer,
+        (request: IncomingMessage, socket: Duplex, head: Buffer) => void
+    >();
+    const attach = (listener: HttpServer | HttpsServer) => {
+        if (attachments.has(listener)) return;
+        const upgrade = (request: IncomingMessage, socket: Duplex, head: Buffer) => {
+            wss.handleUpgrade(request, socket, head, ws => {
+                owners.set(ws, listener);
+                wss.emit('connection', ws, request);
+            });
+        };
+        attachments.set(listener, upgrade);
+        listener.on('upgrade', upgrade);
+    };
+    const detach = (listener: HttpServer | HttpsServer) => {
+        const upgrade = attachments.get(listener);
+        if (upgrade) listener.off('upgrade', upgrade);
+        attachments.delete(listener);
+        for (const ws of wss.clients) if (owners.get(ws) === listener) ws.terminate();
+    };
+    attach(server);
     wss.on('error', () => log('WebSocket server error'));
     wss.on('connection', (ws: WebSocket, request: IncomingMessage) => {
         try {
@@ -222,10 +246,13 @@ export default function initialize(
 
     let stopped: Promise<void> | undefined;
     return {
+        attach,
+        detach,
         stop: () =>
             (stopped ??= new Promise<void>(resolve => {
                 clearInterval(heartbeat);
                 clearInterval(broadcasts);
+                for (const listener of attachments.keys()) detach(listener);
                 wss.clients.forEach(client => client.terminate());
                 wss.close(() => resolve());
             })),

@@ -13,6 +13,9 @@ import {
 } from '@mui/material';
 import { isPlayerName, MAX_PLAYER_NAME_LENGTH } from 'common/playerName';
 import { z } from 'zod';
+import { QRCodeSVG } from 'qrcode.react';
+import { lanOrigin } from 'common/hosting';
+import { useNativeHosting } from '../NativeHosting';
 import useDialogRequest from '../hooks/useDialogRequest';
 import { readResponse } from '../utils/request';
 
@@ -26,6 +29,11 @@ export default function PairDeviceDialog({
     open: boolean;
     onClose: () => void;
 }) {
+    const { state: native } = useNativeHosting();
+    const sharingOrigin = native.kind === 'ready' ? lanOrigin(native.value) : null;
+    const baseOrigin = sharingOrigin || window.location.origin;
+    const localOnly = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(baseOrigin).hostname);
+    const networkMissing = native.kind === 'ready' && native.value.mode === 'lan' && !sharingOrigin;
     const [name, setName] = useState('');
     const [role, setRole] = useState<'player' | 'spectator'>('player');
     const [link, setLink] = useState('');
@@ -36,7 +44,7 @@ export default function PairDeviceDialog({
         setLink('');
         setRevoked(false);
         setConfirmRevoke(false);
-    }, [open, name, role]);
+    }, [open, name, role, baseOrigin]);
     const close = () => {
         cancel();
         onClose();
@@ -58,7 +66,7 @@ export default function PairDeviceDialog({
                         return invitationSchema.parse(data);
                     },
                 ),
-            invitation => setLink(`${window.location.origin}/#pair=${invitation.token}`),
+            invitation => setLink(`${baseOrigin}/#pair=${invitation.token}`),
         );
     const revoke = () =>
         run(
@@ -133,8 +141,26 @@ export default function PairDeviceDialog({
                             value={link}
                             InputProps={{ readOnly: true }}
                             onFocus={event => event.target.select()}
-                            helperText="This preview is local only. Pairing works in another browser on this PC. Wi-Fi sharing is being added separately."
+                            helperText={
+                                localOnly
+                                    ? 'This link works only on this PC. Turn on Wi-Fi sharing to invite phones.'
+                                    : 'Scan this invitation on the intended device. It works once and expires in five minutes.'
+                            }
                         />
+                    )}
+                    {link && !localOnly && (
+                        <QRCodeSVG
+                            role="img"
+                            aria-label="Player invitation QR code"
+                            value={link}
+                            size={192}
+                            marginSize={4}
+                        />
+                    )}
+                    {networkMissing && (
+                        <Alert severity="warning">
+                            Choose a current network in Wi-Fi sharing before creating an invitation.
+                        </Alert>
                     )}
                     {confirmRevoke ? (
                         <Alert severity="warning">
@@ -156,7 +182,10 @@ export default function PairDeviceDialog({
             </DialogContent>
             <DialogActions>
                 <Button onClick={close}>Close</Button>
-                <Button onClick={create} disabled={pending || (role === 'player' && !isPlayerName(name))}>
+                <Button
+                    onClick={create}
+                    disabled={pending || networkMissing || (role === 'player' && !isPlayerName(name))}
+                >
                     Create invitation
                 </Button>
             </DialogActions>
