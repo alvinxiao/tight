@@ -65,12 +65,16 @@ export default function RestartGameDialog(props: RestartGameDialogProps) {
         onClose?.();
     };
 
-    const onRestart = () => run(signal => api.gameRestart({ id: game.id, ...gameOptions }, { signal }), () => {
-        onClose();
-    });
+    const onRestart = () =>
+        run(
+            signal => api.gameRestart({ id: game.id, ...gameOptions }, { signal }),
+            () => {
+                onClose();
+            },
+        );
 
     return (
-        <Dialog open={open} fullScreen>
+        <Dialog PaperProps={{ 'aria-label': 'Restart game' }} open={open} onClose={onCancel} fullScreen>
             <AppBar sx={styles.appBar}>
                 <Toolbar>
                     <Tooltip title="Close">
@@ -86,7 +90,12 @@ export default function RestartGameDialog(props: RestartGameDialogProps) {
                 </Toolbar>
             </AppBar>
             <DialogContent dividers>
-                {restartError && <Alert severity="error">Could not restart the game or confirm its state. Close this dialog and check the game before trying again.</Alert>}
+                {restartError && (
+                    <Alert severity="error">
+                        Could not restart the game or confirm its state. Close this dialog and check the game before
+                        trying again.
+                    </Alert>
+                )}
                 <Box display="flex" flexDirection="column">
                     <Typography>
                         Restarting the game will reset all progress. Update any game settings below and click "Restart

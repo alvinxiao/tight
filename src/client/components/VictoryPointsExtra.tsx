@@ -48,6 +48,7 @@ function VictoryPointsExtra(props: VictoryPointsExtraProps) {
                 <span>
                     <IconButton
                         classes={{ root: classes.iconButton }}
+                        aria-label={`Remove a victory point from ${factionName}`}
                         disabled={disabled || victoryPoints < 1}
                         onClick={() => onVictoryPointsChange(victoryPoints - 1)}
                         size="large"
@@ -69,6 +70,7 @@ function VictoryPointsExtra(props: VictoryPointsExtraProps) {
                 <span>
                     <IconButton
                         classes={{ root: classes.iconButton }}
+                        aria-label={`Add a victory point to ${factionName}`}
                         onClick={() => onVictoryPointsChange(victoryPoints + 1)}
                         disabled={disabled}
                         size="large"

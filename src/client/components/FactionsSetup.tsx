@@ -35,10 +35,19 @@ function FactionsSetup(props: FactionsSetupProps) {
         return null;
     }
 
-    if (!isHost) return <Table aria-label="Faction assignments"><TableBody>
-        {factions.map(faction => <TableRow key={faction.name}><TableCell>{faction.name}</TableCell>
-            <TableCell>{faction.playerIds.join(', ') || 'No players assigned'}</TableCell></TableRow>)}
-    </TableBody></Table>;
+    if (!isHost)
+        return (
+            <Table aria-label="Faction assignments">
+                <TableBody>
+                    {factions.map(faction => (
+                        <TableRow key={faction.name}>
+                            <TableCell>{faction.name}</TableCell>
+                            <TableCell>{faction.playerIds.join(', ') || 'No players assigned'}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        );
 
     const onFactionChange = (i: number, factionName: string) => {
         sendData({ type: MessageType.GAME_UPDATE_FACTION, data: { gameId, order: i, name: factionName } });
@@ -66,7 +75,7 @@ function FactionsSetup(props: FactionsSetupProps) {
     }));
 
     return (
-        <Table>
+        <Table aria-label="Faction setup">
             <TableBody>
                 {factions.map(({ name, color, playerIds }, i) => (
                     <TableRow key={i}>
@@ -83,7 +92,10 @@ function FactionsSetup(props: FactionsSetupProps) {
                                 name={`${i}`}
                                 value={i}
                                 onChange={onFactionReorder}
-                                inputProps={{ sx: { paddingLeft: '4px' } }}
+                                inputProps={{
+                                    'aria-label': `Position for player slot ${i + 1}`,
+                                    sx: { paddingLeft: '4px' },
+                                }}
                                 disabled={disableReordering}
                             >
                                 {playerOrderOptions.map(o => (

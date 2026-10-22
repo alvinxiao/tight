@@ -67,7 +67,11 @@ function Header() {
         connectionStatus = (
             <Grid container justifyContent="center" alignItems="center" spacing={1}>
                 <Grid item>
-                    <CircularProgress style={{ color: appTheme.palette.text.primary }} size={24} />
+                    <CircularProgress
+                        aria-label="Connecting"
+                        style={{ color: appTheme.palette.text.primary }}
+                        size={24}
+                    />
                 </Grid>
                 <Grid item>
                     <Typography color="textPrimary">Connecting...</Typography>
@@ -82,7 +86,13 @@ function Header() {
                 <Toolbar>
                     <Grid container alignItems="center">
                         <Tooltip title="Menu">
-                            <IconButton edge="start" onClick={() => setDrawerOpen(open => !open)} size="large">
+                            <IconButton
+                                aria-label="Menu"
+                                aria-expanded={drawerOpen}
+                                edge="start"
+                                onClick={() => setDrawerOpen(open => !open)}
+                                size="large"
+                            >
                                 <MenuIcon />
                             </IconButton>
                         </Tooltip>
@@ -94,7 +104,7 @@ function Header() {
                     </Grid>
                     {connectionStatus}
                     <SharingButton />
-                    <Tooltip title={theme === 'light' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}>
+                    <Tooltip title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}>
                         <IconButton onClick={() => onThemeChange(theme === 'dark' ? 'light' : 'dark')} size="large">
                             {theme === 'dark' ? <Brightness6Outlined /> : <Brightness6 />}
                         </IconButton>

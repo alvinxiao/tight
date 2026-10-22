@@ -1,5 +1,5 @@
 import { Grid, MenuItem, TextField, Toolbar, Typography } from '@mui/material';
-import React, { useMemo, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 
 import { Objective as ObjectiveType, isPlayerSpectator } from 'common/Game';
 import { MessageType } from 'common/message';
@@ -13,6 +13,7 @@ import useGameInfo from '../hooks/useGameInfo';
 import { useAppContext } from '../Context';
 
 function StrategyCards() {
+    const selectId = useId();
     const { game, gameId, playerId, isHost } = useGameInfo();
     const { sendData } = useAppContext();
     const [factionName, setFactionName] = useState(() => {
@@ -81,6 +82,7 @@ function StrategyCards() {
                                 sx={{ marginTop: 2 }}
                                 fullWidth
                                 select
+                                id={selectId}
                                 label="My Secret Objectives"
                                 value={factionName}
                                 onChange={e => setFactionName(e.target.value)}

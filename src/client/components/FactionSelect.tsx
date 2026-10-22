@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { TextField, MenuItem, TextFieldProps as TextFieldPropsType, IconButton, Tooltip } from '@mui/material';
 import DiceIcon from '@mui/icons-material/Casino';
 
@@ -15,6 +15,7 @@ export interface FactionSelectProps extends Omit<TextFieldPropsType<'outlined'>,
 }
 
 function FactionSelect(props: FactionSelectProps) {
+    const id = useId();
     const { factionNames, onChange, order = -1, hideNone = false, disabled = false, ...TextFieldProps } = props;
     const { game } = useGameInfo();
 
@@ -52,6 +53,7 @@ function FactionSelect(props: FactionSelectProps) {
 
     return (
         <TextField
+            id={id}
             defaultValue={FACTION_NONE}
             error={Boolean(errorMessage)}
             fullWidth

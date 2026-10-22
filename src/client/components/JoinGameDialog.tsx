@@ -78,7 +78,9 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
         }
         setInvalid(false);
 
-        void run(signal => api.gameValidate({ gameId: id }, { signal }), exists => {
+        void run(
+            signal => api.gameValidate({ gameId: id }, { signal }),
+            exists => {
                 if (exists) {
                     navigate(`/${id}`);
                 } else {
@@ -90,11 +92,12 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                         setInvalid(true);
                     }
                 }
-            });
+            },
+        );
     };
 
     return (
-        <Dialog open={open} fullScreen>
+        <Dialog PaperProps={{ 'aria-label': 'Join game' }} open={open} onClose={onCancel} fullScreen>
             <AppBar sx={styles.appBar}>
                 <Toolbar>
                     <Tooltip title="Close">
@@ -115,7 +118,13 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                                 color="primary"
                                 variant="outlined"
                                 label="Game Code"
-                                helperText={error === 'invalid' ? 'Invalid Game Code' : error === 'network' ? 'Could not reach the host. Try again.' : ''}
+                                helperText={
+                                    error === 'invalid'
+                                        ? 'Invalid Game Code'
+                                        : error === 'network'
+                                          ? 'Could not reach the host. Try again.'
+                                          : ''
+                                }
                                 error={Boolean(error)}
                                 onChange={e => setGameId(e.target.value.toUpperCase())}
                                 value={gameId}

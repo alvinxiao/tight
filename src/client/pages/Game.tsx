@@ -10,6 +10,7 @@ import {
     Box,
     Button,
     CircularProgress,
+    Collapse,
     Grid,
     IconButton,
     Paper,
@@ -23,17 +24,9 @@ import {
 } from '@mui/material';
 import { makeStyles } from '@mui/styles';
 
-import {
-    Game,
-    GameClientData,
-    GameStatus,
-    getFactionTurn,
-    Phase,
-    StrategyCardIndex,
-} from 'common/Game';
+import { Game, GameClientData, GameStatus, getFactionTurn, Phase, StrategyCardIndex } from 'common/Game';
 import { MessageType } from 'common/message';
 
-import { Accordion, AccordionDetails, AccordionSummary } from '../components/Accordion';
 import GameInfoToolbar from '../components/GameInfoToolbar';
 import PlayerNameDialog from '../components/PlayerNameDialog';
 import PlayerSetup from '../components/PlayerSetup';
@@ -278,17 +271,13 @@ function Game() {
                 <Paper>
                     <GameInfoToolbar game={game} />
                 </Paper>
-                <Accordion
-                    className={classes.statusAccordion}
-                    disableMargin
-                    expanded={actionExpanded}
-                    onChange={(_e, expanded) => setActionExpaned(expanded)}
-                >
-                    <AccordionSummary disableMargin classes={{ root: classes.statusSummary }}>
+                <Box className={classes.statusAccordion}>
+                    <Toolbar classes={{ root: classes.statusSummary }}>
                         <Grid container justifyContent="space-between" alignItems="center">
                             <Tooltip title={Phase[prevPhase]}>
                                 <span>
                                     <IconButton
+                                        aria-label={`Previous phase: ${Phase[prevPhase]}`}
                                         disabled={isSpectator || pending || !canBack || phase === Phase.STRATEGY}
                                         onClick={e => onPhaseClick(e, false)}
                                         size="large"
@@ -300,13 +289,20 @@ function Game() {
                             {pending ? (
                                 <CircularProgress size="24" />
                             ) : (
-                                <Button variant="contained" color="primary">
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    aria-label={`${Phase[phase]} phase details`}
+                                    aria-expanded={actionExpanded}
+                                    onClick={() => setActionExpaned(expanded => !expanded)}
+                                >
                                     <Typography align="center">{`${Phase[phase]}`}</Typography>
                                 </Button>
                             )}
                             <Tooltip title={Phase[nextPhase]}>
                                 <span>
                                     <IconButton
+                                        aria-label={`Next phase: ${Phase[nextPhase]}`}
                                         disabled={isSpectator || pending || !canNext || phase === Phase.AGENDA}
                                         onClick={e => onPhaseClick(e, true)}
                                         size="large"
@@ -316,20 +312,25 @@ function Game() {
                                 </span>
                             </Tooltip>
                         </Grid>
-                    </AccordionSummary>
-                    <AccordionDetails classes={{ root: classes.phaseActionDetails }}>
-                        <Grid container direction="column">
-                            {stepperToolbar}
-                            <Stepper classes={{ root: classes.stepper }} activeStep={phase} alternativeLabel>
-                                {STEPS.map(label => (
-                                    <Step classes={{ alternativeLabel: classes.stepLabelAlternativeLabel }} key={label}>
-                                        <StepLabel>{label}</StepLabel>
-                                    </Step>
-                                ))}
-                            </Stepper>
-                        </Grid>
-                    </AccordionDetails>
-                </Accordion>
+                    </Toolbar>
+                    <Collapse in={actionExpanded}>
+                        <Box className={classes.phaseActionDetails}>
+                            <Grid container direction="column">
+                                {stepperToolbar}
+                                <Stepper classes={{ root: classes.stepper }} activeStep={phase} alternativeLabel>
+                                    {STEPS.map(label => (
+                                        <Step
+                                            classes={{ alternativeLabel: classes.stepLabelAlternativeLabel }}
+                                            key={label}
+                                        >
+                                            <StepLabel>{label}</StepLabel>
+                                        </Step>
+                                    ))}
+                                </Stepper>
+                            </Grid>
+                        </Box>
+                    </Collapse>
+                </Box>
                 <Toolbar sx={{ display: 'flex', width: '100%', height: '100%', padding: 1 }}>
                     {currentFactionTurn && currentFactionTurn.strategyCard ? (
                         <FactionHeader

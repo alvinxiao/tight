@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useId, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import EditIcon from '@mui/icons-material/Edit';
 import SyncIcon from '@mui/icons-material/Sync';
@@ -67,6 +67,7 @@ function syncPlanetsFunc({ sendData, refreshed, exhausted, gameId, factionName, 
 }
 
 function Planets() {
+    const selectId = useId();
     const classes = useStyle();
     const { sendData } = useAppContext();
     const { game, gameId, playerId, isHost } = useGameInfo();
@@ -182,10 +183,10 @@ function Planets() {
         totals.influence += refreshed ? getPlanetValue(planet, 'influence') : 0;
 
         // Must exhaust planet to use tech bonus (New in TI4)
-        totals.biotic += refreshed ? getPlanetValue(planet, 'biotic') ?? 0 : 0;
-        totals.warfare += refreshed ? getPlanetValue(planet, 'warfare') ?? 0 : 0;
-        totals.propulsion += refreshed ? getPlanetValue(planet, 'propulsion') ?? 0 : 0;
-        totals.cybernetic += refreshed ? getPlanetValue(planet, 'cybernetic') ?? 0 : 0;
+        totals.biotic += refreshed ? (getPlanetValue(planet, 'biotic') ?? 0) : 0;
+        totals.warfare += refreshed ? (getPlanetValue(planet, 'warfare') ?? 0) : 0;
+        totals.propulsion += refreshed ? (getPlanetValue(planet, 'propulsion') ?? 0) : 0;
+        totals.cybernetic += refreshed ? (getPlanetValue(planet, 'cybernetic') ?? 0) : 0;
     });
 
     // Handle click events to refresh or exhaust planets
@@ -241,6 +242,7 @@ function Planets() {
                         sx={{ marginTop: 2 }}
                         fullWidth
                         select
+                        id={selectId}
                         label={factionNameOptions.length ? 'My Factions' : 'No Factions'}
                         value={factionName}
                         onChange={e => setFactionName(e.target.value)}
