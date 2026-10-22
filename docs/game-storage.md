@@ -1,6 +1,6 @@
 # Game storage and recovery
 
-The backend stores games in `games.sqlite` using Node's built-in SQLite support. Use Node 24.19.0 (recommended) or at least 22.13.0. The database format is version 1.
+The backend stores games in `games.sqlite` using Node's built-in SQLite support. Use Node 24.19.0 (recommended) or at least 22.15.0. The database format is version 1.
 
 The default directory is `%LOCALAPPDATA%\TIGHT` on Windows, or `$XDG_DATA_HOME/tight` on other systems (falling back to `~/.local/share/tight`). `TIGHT_DATA_DIR` overrides the directory. Data stays outside the application installation and survives a server restart. The future Electron launcher must pass its per-user data directory explicitly.
 

@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import ip from 'ip';
+import { networkInterfaces } from 'node:os';
 import { startBackend, defaultDataDirectory } from './bootstrap.js';
 
 try {
@@ -10,10 +10,13 @@ try {
     });
     const protocol = new URL(backend.origin).protocol;
     const bindHost = process.env.TIGHT_HOST;
+    const localAddress = Object.values(networkInterfaces())
+        .flatMap(values => values || [])
+        .find(value => value.family === 'IPv4' && !value.internal)?.address || '127.0.0.1';
     const address =
         bindHost && bindHost !== '0.0.0.0' && bindHost !== '::'
             ? backend.origin
-            : `${protocol}//${ip.address()}:${backend.port}/`;
+            : `${protocol}//${localAddress}:${backend.port}/`;
     console.log(`Server listening on port: ${backend.port}`);
     console.log(`Server running on: ${chalk.cyanBright(address)}`);
     const shutdown = () => {

@@ -15,7 +15,7 @@ jobs:
           - os: windows-latest
             node: '24.19.0'
           - os: ubuntu-latest
-            node: '22.13.0'
+            node: '22.15.0'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
@@ -25,6 +25,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - run: npm run audit:runtime
       - run: node scripts/run-ci-tests.mjs
         env:
           TIGHT_USE_HTTP: 'true'

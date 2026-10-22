@@ -1,3 +1,4 @@
+import { writeRuntimeInventory } from './runtime-inventory.mjs';
 import { packager } from '@electron/packager';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -10,6 +11,7 @@ const stage = path.join(root, '.desktop-stage');
 await rm(stage, { recursive: true, force: true });
 await mkdir(path.join(stage, 'build'), { recursive: true });
 try {
+    await writeRuntimeInventory(root, stage);
     await cp(path.join(root, 'desktop'), path.join(stage, 'desktop'), { recursive: true });
     await cp(path.join(root, 'dist'), path.join(stage, 'dist'), { recursive: true });
     await cp(path.join(root, 'build', 'desktop-backend.js'), path.join(stage, 'build', 'desktop-backend.js'));
@@ -43,7 +45,11 @@ try {
         appBundleId: 'org.alvinxiao.tight',
         win32metadata: { CompanyName: 'TIGHT', FileDescription: 'TIGHT game helper', ProductName: 'TIGHT' },
     });
-    for (const output of outputs) console.log(`Packaged desktop app: ${output}`);
+    for (const output of outputs) {
+        for (const name of ['runtime-dependencies.json', 'THIRD-PARTY-NOTICES.txt'])
+            await cp(path.join(stage, name), path.join(output, name));
+        console.log(`Packaged desktop app: ${output}`);
+    }
 } finally {
     await rm(stage, { recursive: true, force: true });
 }
