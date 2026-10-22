@@ -39,6 +39,7 @@ test('setup controls support names and keyboard input; core screens meet automat
         await page.keyboard.press('Enter');
         const dialog = page.getByRole('dialog', { name: 'Create new game', exact: true });
         await expect(dialog).toBeVisible();
+        await expect(dialog.locator('..')).toHaveCSS('opacity', '1');
         await scan('new game');
         const count = dialog.getByRole('combobox', { name: 'Number of Players', exact: true });
         await tabTo(count);

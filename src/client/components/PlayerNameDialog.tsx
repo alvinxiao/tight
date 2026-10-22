@@ -204,7 +204,7 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
                                 size="large"
                                 onClick={onJoinClick}
                             >
-                                {joining ? <CircularProgress size={24} /> : 'Continue'}
+                                {joining ? <CircularProgress aria-label="Joining game" size={24} /> : 'Continue'}
                             </Button>
                         </FormControl>
                     </Grid>

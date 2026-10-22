@@ -141,7 +141,7 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                                 size="large"
                                 onClick={e => onJoinClick(e, gameId)}
                             >
-                                {joining ? <CircularProgress size={24} /> : 'Join'}
+                                {joining ? <CircularProgress aria-label="Joining game" size={24} /> : 'Join'}
                             </Button>
                         </FormControl>
                     </Grid>
@@ -157,7 +157,7 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                                         size="large"
                                         onClick={e => onJoinClick(e, currentGameId)}
                                     >
-                                        {joining ? <CircularProgress size={24} /> : `Rejoin "${currentGameId}"`}
+                                        {joining ? <CircularProgress aria-label="Joining game" size={24} /> : `Rejoin "${currentGameId}"`}
                                     </Button>
                                 </FormControl>
                             </Grid>
@@ -175,7 +175,7 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                                         }}
                                     >
                                         {joining ? (
-                                            <CircularProgress size={24} />
+                                            <CircularProgress aria-label="Joining game" size={24} />
                                         ) : (
                                             `Rejoin "${currentGameId}" as new player`
                                         )}

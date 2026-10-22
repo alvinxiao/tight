@@ -227,7 +227,7 @@ function Game() {
         if (round === game.numRounds) {
             phaseStatus = (
                 <Button disabled={isSpectator} color="primary" variant="contained" onClick={onEndGame}>
-                    {pending ? <CircularProgress size="24" /> : 'End Game'}
+                    {pending ? <CircularProgress aria-label="Saving game" size="24" /> : 'End Game'}
                 </Button>
             );
         } else if (canNext) {
@@ -238,7 +238,7 @@ function Game() {
                     variant="contained"
                     onClick={e => onStartNextRound(e)}
                 >
-                    {pending ? <CircularProgress size="24" /> : 'Start Next Round'}
+                    {pending ? <CircularProgress aria-label="Saving game" size="24" /> : 'Start Next Round'}
                 </Button>
             );
         }
@@ -287,7 +287,7 @@ function Game() {
                                 </span>
                             </Tooltip>
                             {pending ? (
-                                <CircularProgress size="24" />
+                                <CircularProgress aria-label="Saving game" size="24" />
                             ) : (
                                 <Button
                                     variant="contained"

@@ -114,7 +114,7 @@ export default function RestartGameDialog(props: RestartGameDialogProps) {
                         disabled={restartingGame}
                     >
                         {restartingGame ? (
-                            <CircularProgress variant="indeterminate" size={30} sx={{ marginRight: 2 }} />
+                            <CircularProgress aria-label="Restarting game" variant="indeterminate" size={30} sx={{ marginRight: 2 }} />
                         ) : null}
                         Restart Game
                     </Button>
