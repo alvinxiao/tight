@@ -5,16 +5,19 @@ import path from 'node:path';
 
 const [mode, executable, directory] = process.argv.slice(2);
 if (!['create', 'resume'].includes(mode) || !executable || !directory) throw new Error('Expected create/resume, installed executable, and test data directory.');
+const manifest = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
 const environment = { ...process.env };
 delete environment.TIGHT_DATA_DIR;
 delete environment.NODE_PATH;
 if (process.platform === 'win32') {
     for (const name of Object.keys(environment)) if (name.toLowerCase() === 'path') delete environment[name];
-    environment.PATH = [environment.SystemRoot, path.join(environment.SystemRoot, 'System32')].join(';');
+    environment.PATH = [process.env.SystemRoot, path.join(process.env.SystemRoot, 'System32')].join(';');
 }
 const app = await electron.launch({ executablePath: executable, args: [], cwd: path.dirname(executable), env: environment, timeout: 30000 });
 try {
     const page = await app.firstWindow();
+    const identity = await app.evaluate(({ app }) => ({ name: app.getName(), version: app.getVersion(), packaged: app.isPackaged, electron: process.versions.electron }));
+    assert.deepEqual(identity, { name: 'TIGHT', version: manifest.version, packaged: true, electron: manifest.devDependencies.electron });
     const recordPath = path.join(directory, 'installer-save.json');
     if (mode === 'create') {
         await page.getByRole('button', { name: 'Create Game', exact: true }).waitFor();

@@ -68,7 +68,7 @@ jobs:
       - name: Install, launch, uninstall, and reinstall preview
         if: runner.os == 'Windows'
         shell: pwsh
-        run: ./scripts/test-windows-installer.ps1
+        run: node scripts/run-ci-tests.mjs installer-lifecycle
       - uses: actions/upload-artifact@v4
         if: runner.os == 'Windows'
         with:

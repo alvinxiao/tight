@@ -5,6 +5,8 @@ export function windowsInstallerConfig(root, manifest, mode, environment = proce
     if (mode === 'preview' && (environment.CSC_LINK || environment.WIN_CSC_LINK || environment.CSC_NAME || environment.CSC_KEY_PASSWORD || environment.WIN_CSC_KEY_PASSWORD))
         throw new Error('Preview installers must be unsigned. Remove signing credentials or select release mode.');
     if (mode === 'release') {
+        if (environment.WIN_CSC_LINK || environment.WIN_CSC_KEY_PASSWORD || environment.CSC_NAME)
+            throw new Error('Release installers reject competing signing aliases. Use only CSC_LINK and CSC_KEY_PASSWORD.');
         if (!environment.CSC_LINK || !environment.CSC_KEY_PASSWORD)
             throw new Error('Release installers require CSC_LINK and CSC_KEY_PASSWORD publisher credentials.');
         if (!path.isAbsolute(environment.CSC_LINK))

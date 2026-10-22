@@ -29,3 +29,9 @@ test('release installers fail closed without publisher credentials and a complet
     assert.equal(config.win.signAndEditExecutable, true);
     assert.match(config.artifactName, /release-setup/);
 });
+
+test('release signing rejects competing aliases that could select another publisher for the installer', () => {
+    const credentials = { CSC_LINK: path.resolve('publisher.pfx'), CSC_KEY_PASSWORD: 'password', TIGHT_RIGHTS_REVIEW_URL: 'https://example.test/completed-review' };
+    for (const variable of ['WIN_CSC_LINK', 'WIN_CSC_KEY_PASSWORD', 'CSC_NAME'])
+        assert.throws(() => windowsInstallerConfig('/project', manifest, 'release', { ...credentials, [variable]: 'competing-publisher' }), /competing signing/);
+});
