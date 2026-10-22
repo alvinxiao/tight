@@ -17,7 +17,7 @@ const artifacts = await build({ projectDir: root, targets: Platform.WINDOWS.crea
 if (mode === 'release') {
     const installer = artifacts.find(file => file.endsWith('-release-setup.exe'));
     if (!installer) throw new Error('The signed release installer was not produced.');
-    await promisify(execFile)('powershell.exe', ['-NoProfile', '-NonInteractive', '-File',
+    await promisify(execFile)('pwsh.exe', ['-NoProfile', '-NonInteractive', '-File',
         path.join(root, 'scripts', 'verify-windows-release-signatures.ps1'),
         '-AppDirectory', packaged, '-InstallerPath', installer]);
 }
