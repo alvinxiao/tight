@@ -28,6 +28,7 @@ test('diagnostic exports contain only named event codes and approved status fiel
     const report = diagnostics.exportReport(versions, state);
     assert.equal(JSON.stringify(report).includes('SECRET'), false);
     assert.equal(report.events.length, 3);
+    assert.equal(report.versions.backend, versions.app);
     assert.equal(report.events[1].code, 'EADDRINUSE');
     assert.equal(report.events[2].code, undefined);
     assert.deepEqual(report.host, {

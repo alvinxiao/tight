@@ -100,6 +100,7 @@ function createDiagnostics(directory) {
             exportedAt: new Date().toISOString(),
             versions: {
                 app: versions.app,
+                backend: versions.app,
                 electron: versions.electron,
                 node: versions.node,
                 platform: process.platform,

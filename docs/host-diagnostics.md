@@ -2,7 +2,9 @@
 
 The Windows desktop has a **Help > Export diagnostics...** command. Choose a writable folder for its JSON file. A startup failure also offers **Export diagnostics** before restarting or quitting. Review the file before sharing it with support.
 
-The report contains the app, Electron, and Node versions, the operating system and architecture, the current backend state, the number of open connections and connected paired player devices, the number of private network adapters, and whether Wi-Fi sharing is enabled. Storage `open` means the backend owns an open database. It does not certify free disk space or that the next write will succeed. A stopped or unreachable backend reports storage unavailable.
+The report contains the app, bundled backend, Electron, and Node versions, the operating system and architecture, the current backend state, the number of open connections and connected paired player devices, the number of private network adapters, and whether Wi-Fi sharing is enabled. Storage `open` means the backend owns an open database. It does not certify free disk space or that the next write will succeed. A stopped or unreachable backend reports storage unavailable.
+
+The bundled backend uses the app version.
 
 Lifecycle events cover startup, startup failure, bind failures, sharing changes, backend crashes, shutdown, sleep, and resume. Known operating-system error codes appear without their error messages. The report excludes cookies, host credentials, invitations, addresses, game codes, player names, game data, installation paths, and the data-folder path. It does not copy standard output, stack traces, request bodies, or the game database.
 
