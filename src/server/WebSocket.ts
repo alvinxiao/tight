@@ -30,6 +30,12 @@ export interface SendDataParams {
  * Send data to one client
  */
 export function sendData({ ws, type, data, error }: SendDataParams) {
+    if (ws.readyState !== WS.OPEN) return;
+    // A stalled reader must not retain an unbounded queue of game snapshots.
+    if (ws.bufferedAmount > 1024 * 1024) {
+        ws.terminate();
+        return;
+    }
     const id = getWebSocketLogId(ws);
     logWS(true, id, { type, data, error });
     ws.send(JSON.stringify({ type, data, error }));
@@ -53,10 +59,7 @@ export function broadcastChangeData({ wss, dirtyGames, error, serialize }: Broad
             const serialized = serialize(ws, game);
             if (!serialized) return;
             const data: ChangeData = { game: serialized };
-            const payload = { type: MessageType.BROADCAST_CHANGE, data, error };
-            const id = getWebSocketLogId(ws);
-            logWS(true, id, payload);
-            ws.send(JSON.stringify(payload));
+            sendData({ ws, type: MessageType.BROADCAST_CHANGE, data, error });
         }
     });
 }

@@ -1,3 +1,4 @@
+import { requestLimiter } from './trafficLimits.js';
 import { Hosting } from 'common/hosting.js';
 import { lanInterfaces } from './lanInterfaces.js';
 import { AccessSessions } from './accessSessions.js';
@@ -45,6 +46,7 @@ export async function startBackend(options: BackendOptions) {
             if (rejection) res.status(rejection.status).json({ error: rejection.message });
             else next();
         });
+        app.use(requestLimiter());
         let port = options.port;
         const distDir = path.join(dirname, '../dist');
         const html = path.join(distDir, 'index.html');
@@ -97,6 +99,14 @@ export async function startBackend(options: BackendOptions) {
             server = http.createServer(app);
         }
 
+        const limitListener = (listener: HttpServer | HttpsServer) => {
+            listener.maxConnections = 256;
+            listener.headersTimeout = 10000;
+            listener.requestTimeout = 15000;
+            listener.keepAliveTimeout = 5000;
+            listener.maxRequestsPerSocket = 1000;
+        };
+        limitListener(server);
         const sockets = initializeWebSocketServer(server, request => verifyRequest(request), sessions);
         let lan: { address: string; server: HttpServer | HttpsServer } | null = null;
         let stopping = false;
@@ -163,6 +173,7 @@ export async function startBackend(options: BackendOptions) {
                 let replacement: typeof lan = null;
                 if (selected !== null) {
                     const listener = key && cert ? https.createServer({ key, cert }, app) : http.createServer(app);
+                    limitListener(listener);
                     sockets.attach(listener);
                     try {
                         await new Promise<void>((resolve, reject) => {
