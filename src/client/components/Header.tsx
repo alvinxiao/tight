@@ -157,7 +157,9 @@ function Header() {
             </Snackbar>
             {session.role === 'player' && (
                 <Typography variant="body2" sx={{ px: 2, py: 1 }}>
-                    Playing as {session.playerId}. The host controls setup and game phases.
+                    Playing as {session.playerId}. {session.tableEditing
+                        ? 'Table-wide public editing enabled. The host controls setup, game start/end and device access.'
+                        : 'The host controls setup and game phases.'}
                 </Typography>
             )}
             {session.role === 'spectator' && (

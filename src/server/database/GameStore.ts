@@ -70,16 +70,18 @@ export class GameStore {
                 this.createAccessSchema();
                 this.createCommandSchema();
                 this.createLibrarySchema();
-            } else if (version === 1 || version === 2 || version === 3) {
+                this.createTableEditingSchema();
+            } else if (version === 1 || version === 2 || version === 3 || version === 4) {
                 // Validate before VACUUM or schema writes so an invalid old save is preserved.
                 const games = this.readGames();
                 if (version >= 2) this.validateAccessSessions(games);
-                if (version === 3) this.validateCommandStorage(games);
+                if (version >= 3) this.validateCommandStorage(games);
                 this.backupMigration(version);
                 if (version === 1) this.createAccessSchema();
                 if (version < 3) this.createCommandSchema();
-                this.createLibrarySchema();
-            } else if (version !== 4) {
+                if (version < 4) this.createLibrarySchema();
+                this.createTableEditingSchema();
+            } else if (version !== 5) {
                 throw new Error('Unsupported game database version; use a compatible version of TIGHT');
             }
             this.database.exec('COMMIT; PRAGMA synchronous=FULL');
@@ -147,6 +149,11 @@ export class GameStore {
         } catch (cause) {
             throw this.writeError(cause);
         }
+    }
+    private createTableEditingSchema(): void {
+        this.database.exec(`ALTER TABLE access_sessions ADD COLUMN table_editing INTEGER NOT NULL DEFAULT 0
+            CHECK(table_editing IN (0, 1) AND (role='player' OR table_editing=0));
+            PRAGMA user_version=5`);
     }
     private createAccessSchema(): void {
         this.database.exec(`CREATE TABLE access_sessions (
@@ -218,9 +225,9 @@ export class GameStore {
         }
         return games;
     }
-    private validateAccessSessions(games: GameMap): void {
+    private validateAccessSessions(games: GameMap, tableEditing = false): void {
         for (const raw of this.database
-            .prepare('SELECT token_hash, game_id, role, player_id FROM access_sessions')
+            .prepare(`SELECT token_hash, game_id, role, player_id, ${tableEditing ? 'table_editing' : '0 AS table_editing'} FROM access_sessions`)
             .all()) {
             const row = z
                 .object({
@@ -228,19 +235,21 @@ export class GameStore {
                     game_id: z.string(),
                     role: z.enum(['player', 'spectator']),
                     player_id: z.string().nullable(),
+                    table_editing: z.union([z.literal(0), z.literal(1)]),
                 })
                 .parse(raw);
             guestSessionSchema.parse({
                 role: row.role,
                 gameId: row.game_id,
                 ...(row.role === 'player' ? { playerId: row.player_id } : {}),
+                ...(row.table_editing === 1 ? { tableEditing: true } : {}),
             });
             if (!games[row.game_id]) throw new Error('Saved device grant references a missing game');
         }
     }
     load(): GameMap {
         const games = this.readGames();
-        this.validateAccessSessions(games);
+        this.validateAccessSessions(games, true);
         this.validateCommandStorage(games);
         this.savedGames();
         if (Object.keys(games).length) {
@@ -259,16 +268,17 @@ export class GameStore {
     }
     findAccessSession(hash: string): GuestSession | null {
         const raw = this.database
-            .prepare('SELECT game_id, role, player_id FROM access_sessions WHERE token_hash=?')
+            .prepare('SELECT game_id, role, player_id, table_editing FROM access_sessions WHERE token_hash=?')
             .get(hash);
         if (!raw) return null;
         const row = z
-            .object({ game_id: z.string(), role: z.enum(['player', 'spectator']), player_id: z.string().nullable() })
+            .object({ game_id: z.string(), role: z.enum(['player', 'spectator']), player_id: z.string().nullable(), table_editing: z.union([z.literal(0), z.literal(1)]) })
             .parse(raw);
         return guestSessionSchema.parse({
             role: row.role,
             gameId: row.game_id,
             ...(row.role === 'player' ? { playerId: row.player_id } : {}),
+                ...(row.table_editing === 1 ? { tableEditing: true } : {}),
         });
     }
     revokeAccessSessions(gameId: string): void {
@@ -288,8 +298,8 @@ export class GameStore {
                     .prepare('DELETE FROM access_sessions WHERE game_id=? AND player_id=?')
                     .run(session.gameId, session.playerId);
             this.database
-                .prepare('INSERT INTO access_sessions(token_hash, game_id, role, player_id) VALUES (?, ?, ?, ?)')
-                .run(hash, session.gameId, session.role, session.role === 'player' ? session.playerId : null);
+                .prepare('INSERT INTO access_sessions(token_hash, game_id, role, player_id, table_editing) VALUES (?, ?, ?, ?, ?)')
+                .run(hash, session.gameId, session.role, session.role === 'player' ? session.playerId : null, session.role === 'player' && session.tableEditing ? 1 : 0);
             this.database.exec('COMMIT');
         } catch (cause) {
             this.failTransaction(cause, transaction);

@@ -26,7 +26,7 @@ const useStyles = makeStyles(theme => ({
 
 function StatusPhase() {
     const classes = useStyles();
-    const { game, playerId, canEditFaction } = useGameInfo();
+    const { game, playerId, canEditPublicFaction } = useGameInfo();
     if (!game) {
         return null;
     }
@@ -41,7 +41,7 @@ function StatusPhase() {
                         <FactionHeader faction={faction} />
                     </CardContent>
                     <CardContent classes={{ root: classes.cardContent }}>
-                        <VictoryPoints factionName={faction.name} disabled={!canEditFaction(faction.name)} />
+                        <VictoryPoints factionName={faction.name} disabled={!canEditPublicFaction(faction.name)} />
                     </CardContent>
                 </Card>
             ))}

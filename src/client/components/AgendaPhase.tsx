@@ -23,7 +23,7 @@ import GameSummary from './GameSummary';
 export default function AgendaPhase() {
     const { sendData } = useAppContext();
     const [endGameEarly, setEndGameEarly] = useState(false);
-    const { game, gameId, playerId, isHost } = useGameInfo();
+    const { game, gameId, playerId, isHost, canEditTable } = useGameInfo();
 
     if (!game) {
         return null;
@@ -62,7 +62,7 @@ export default function AgendaPhase() {
         numRounds,
     } = game;
 
-    const isSpectator = !isHost;
+    const isSpectator = !canEditTable;
     const canEndEarly = round < numRounds && !isSpectator;
 
     const factionsAtVp = factions.filter(f => calculateVictoryPoints(game, f.name) >= game.numVictoryPoints);

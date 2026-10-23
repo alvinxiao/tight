@@ -22,14 +22,14 @@ import StrategyCard, { StrategyCardProps } from './StrategyCard';
 
 function StrategyPhase() {
     const { sendData } = useAppContext();
-    const { game, gameId, playerId, strategyCards, isHost, canEditFaction } = useGameInfo();
+    const { game, gameId, playerId, strategyCards, canEditTable, canEditPublicFaction } = useGameInfo();
     if (!game) {
         return null;
     }
 
     const factionName = getFactionTurn(game);
     const stratCardOwners = buildStrategyCardOwners(game);
-    const isSpectator = !isHost;
+    const isSpectator = !canEditTable;
 
     const onTakeCardClick = (e: MouseEvent<HTMLButtonElement>, strategyCard: StrategyCardIndex) => {
         e.stopPropagation();
@@ -76,7 +76,7 @@ function StrategyPhase() {
                 const ButtonProps: NonNullable<StrategyCardProps['ButtonProps']> = {
                     'aria-label': `${buttonLabel} ${name}`,
                     disabled:
-                        !canEditFaction(cardOwner || factionName) || (factionName === 'END' && !Boolean(cardOwner)),
+                        !canEditPublicFaction(cardOwner || factionName) || (factionName === 'END' && !Boolean(cardOwner)),
                     onClick: (e: MouseEvent<HTMLButtonElement>) => onTakeCardClick(e, initiative),
                 };
 

@@ -35,20 +35,20 @@ function Planets() {
     const selectId = useId();
     const classes = useStyle();
     const { sendData } = useAppContext();
-    const { game, gameId, playerId, canEditFaction } = useGameInfo();
+    const { game, gameId, playerId, canEditTable, canEditPublicFaction } = useGameInfo();
     const load = useCallback((signal: AbortSignal) => api.planetList(undefined, { signal }), []);
     const { resource, retry } = useRemoteData(load);
     const pending = resource.kind === 'loading';
     const planetMap = resource.kind === 'loaded' ? resource.data : {};
     const [factionName, setFactionName] = useState(() => {
         const faction = playerId && game ? game.factions.find(f => f.playerIds.includes(playerId)) : null;
-        return faction?.name || '';
+        return faction?.name || (canEditTable ? game?.factions[0]?.name : '') || '';
     });
 
     const factionNameOptions = useMemo(() => {
-        const factionsArray = playerId && game ? game.factions.filter(f => f.playerIds.includes(playerId)) : [];
+        const factionsArray = game ? game.factions.filter(f => canEditTable || (playerId && f.playerIds.includes(playerId))) : [];
         return factionsArray.map(f => f.name);
-    }, [game, playerId]);
+    }, [game, playerId, canEditTable]);
 
     const [openAddDialog, setOpenAddDialog] = useState(false);
     // Get all planets owned by this faction
@@ -66,7 +66,7 @@ function Planets() {
     // Compute totals
     const refreshedPlanets = factionPlanetNames.filter(name => gamePlanets?.[name]?.refreshed);
     const exhaustedPlanets = factionPlanetNames.filter(name => !gamePlanets?.[name]?.refreshed);
-    const editable = canEditFaction(factionName);
+    const editable = canEditPublicFaction(factionName);
     const totals: TotalsTableProps = {
         resources: 0,
         influence: 0,

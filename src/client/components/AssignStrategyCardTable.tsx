@@ -34,7 +34,7 @@ function canSelectStrategyCard(strategyCard: StrategyCard, game: GameClientData,
 
 export default function AssignStrategyCardTable() {
     const { sendData } = useAppContext();
-    const { game, gameId, playerId, strategyCards, canEditFaction } = useGameInfo();
+    const { game, gameId, playerId, strategyCards, canEditPublicFaction } = useGameInfo();
 
     if (!game || strategyCards.length === 0) {
         return null;
@@ -64,7 +64,7 @@ export default function AssignStrategyCardTable() {
                                     value={faction.strategyCard}
                                     variant="outlined"
                                     onChange={e => onTakeCardClick(faction.name, Number(e.target.value))}
-                                    disabled={!canEditFaction(faction.name)}
+                                    disabled={!canEditPublicFaction(faction.name)}
                                 >
                                     <MenuItem key={0} value={0}>
                                         None

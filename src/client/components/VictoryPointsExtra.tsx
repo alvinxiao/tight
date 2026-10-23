@@ -28,8 +28,8 @@ function VictoryPointsExtra(props: VictoryPointsExtraProps) {
     const classes = useStyles(props);
     const { factionName, disabled: explicitlyDisabled = false } = props;
     const { sendData } = useAppContext();
-    const { game, gameId, canEditFaction } = useGameInfo();
-    const disabled = explicitlyDisabled || !canEditFaction(factionName);
+    const { game, gameId, canEditPublicFaction } = useGameInfo();
+    const disabled = explicitlyDisabled || !canEditPublicFaction(factionName);
 
     const faction = game?.factions.find(f => f.name === factionName);
     if (!faction) {

@@ -5,7 +5,7 @@ import { isPlayerName } from './playerName.js';
 const gameId = z.string().refine(isGameCode);
 const playerId = z.string().refine(isPlayerName);
 export const guestSessionSchema = z.discriminatedUnion('role', [
-    z.object({ role: z.literal('player'), gameId, playerId }).strict(),
+    z.object({ role: z.literal('player'), gameId, playerId, tableEditing: z.literal(true).optional() }).strict(),
     z.object({ role: z.literal('spectator'), gameId }).strict(),
 ]);
 export const sessionSchema = z.union([

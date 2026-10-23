@@ -26,9 +26,9 @@ function VictoryPoints(props: VictoryPointsProps) {
     // const classes = useStyles(props);
     const { factionName, allowShowSecret = false, disabled: explicitlyDisabled = false, AccordionProps, hideExtraVp } = props;
     const { sendData } = useAppContext();
-    const { game, gameId, playerId, canEditFaction, isHost } = useGameInfo();
+    const { game, gameId, playerId, canEditPublicFaction, canEditTable, canEditSecretFaction } = useGameInfo();
 
-    const disabled = explicitlyDisabled || !canEditFaction(factionName);
+    const disabled = explicitlyDisabled || !canEditPublicFaction(factionName);
     const faction = game?.factions.find(f => f.name === factionName);
     if (!game || !faction) {
         return null;
@@ -98,7 +98,7 @@ function VictoryPoints(props: VictoryPointsProps) {
                             color={color}
                             backgroundColor={backgroundColor}
                             checked={publicObjectives[po.id - 1] ?? false}
-                            editable={isHost}
+                            editable={canEditTable}
                             disabled={disabled}
                             objective={po}
                             onChange={onPublicObjectiveCheck}
@@ -111,7 +111,7 @@ function VictoryPoints(props: VictoryPointsProps) {
                             color={color}
                             backgroundColor={backgroundColor}
                             editable
-                            disabled={disabled}
+                            disabled={explicitlyDisabled || !canEditSecretFaction(factionName)}
                             allowShowSecret={allowShowSecret || isCurrentFaction || so.cleared || status.ended}
                             objective={so.objective}
                             checked={so.cleared}

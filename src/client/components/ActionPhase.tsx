@@ -54,7 +54,7 @@ const useStyles = makeStyles(theme => ({
 function ActionPhase() {
     const classes = useStyles();
     const { sendData } = useAppContext();
-    const { game, gameId, playerId, isHost, canEditFaction } = useGameInfo();
+    const { game, gameId, playerId, canEditTable, canEditPublicFaction } = useGameInfo();
     if (!game) {
         return null;
     }
@@ -93,7 +93,7 @@ function ActionPhase() {
         }
     };
 
-    const isSpectator = !isHost;
+    const isSpectator = !canEditTable;
     const currentFactionIndex =
         turn === StrategyCardIndex.END ? factionOrder.length : factionOrder.findIndex(f => f.strategyCard === turn);
 
@@ -101,7 +101,7 @@ function ActionPhase() {
         <Grid container direction="column">
             {factionOrder.map((faction: GameFaction) => {
                 const { name: factionName } = faction;
-                const isSpectator = !canEditFaction(factionName);
+                const isSpectator = !canEditPublicFaction(factionName);
                 const factionIndex = factionOrder.findIndex(f => f.name === factionName);
                 const factionDone = faction.passed || currentFactionIndex > factionIndex;
                 const isPoliticsAndFlipped =
@@ -147,7 +147,7 @@ function ActionPhase() {
                                             classes={{ root: classes.button }}
                                             color="primary"
                                             variant="contained"
-                                            disabled={!isHost || faction.passed}
+                                            disabled={!canEditTable || faction.passed}
                                             onClick={() => onNextTurn(faction, !factionDone)}
                                         >
                                             {factionDone ? 'UNDONE' : 'DONE'}
@@ -157,7 +157,7 @@ function ActionPhase() {
                                         <SpeakerSelect
                                             className={classes.speakerSelect}
                                             fullWidth
-                                            disabled={!isHost}
+                                            disabled={!canEditTable}
                                         />
                                     )}
                                     {isImperialAndFlipped && (

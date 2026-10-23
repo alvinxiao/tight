@@ -1,6 +1,8 @@
 import React, { useId, useEffect, useState } from 'react';
 import {
     Alert,
+    Checkbox,
+    FormControlLabel,
     Button,
     Dialog,
     DialogActions,
@@ -37,6 +39,7 @@ export default function PairDeviceDialog({
     const networkMissing = native.kind === 'ready' && native.value.mode === 'lan' && !sharingOrigin;
     const [name, setName] = useState('');
     const [role, setRole] = useState<'player' | 'spectator'>('player');
+    const [tableEditing, setTableEditing] = useState(false);
     const [link, setLink] = useState('');
     const [confirmRevoke, setConfirmRevoke] = useState(false);
     const [revoked, setRevoked] = useState(false);
@@ -45,7 +48,7 @@ export default function PairDeviceDialog({
         setLink('');
         setRevoked(false);
         setConfirmRevoke(false);
-    }, [open, name, role, baseOrigin]);
+    }, [open, name, role, tableEditing, baseOrigin]);
     const close = () => {
         cancel();
         onClose();
@@ -59,7 +62,7 @@ export default function PairDeviceDialog({
                         method: 'POST',
                         signal,
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(role === 'player' ? { role, gameId, playerId: name } : { role, gameId }),
+                        body: JSON.stringify(role === 'player' ? { role, gameId, playerId: name, ...(tableEditing ? { tableEditing: true } : {}) } : { role, gameId }),
                     },
                     async response => {
                         if (!response.ok) throw new Error('Could not invite this device');
@@ -125,6 +128,25 @@ export default function PairDeviceDialog({
                             Use an existing name to replace a lost device. Its previous access will be revoked. Assign
                             the player to a faction from the Players screen.
                         </Typography>
+                    )}
+                    {role === 'player' && (
+                        <>
+                            <FormControlLabel
+                                control={<Checkbox checked={tableEditing} disabled={pending} onChange={event => setTableEditing(event.target.checked)} />}
+                                label="Allow table-wide editing"
+                            />
+                            <Typography variant="body2">
+                                This device can edit every faction's public scores, planets and strategy cards, public
+                                objectives, and table turn, phase, round, speaker and agenda controls. Other players'
+                                private objectives, faction assignments, game start/end, saved games and device access
+                                remain restricted. Leave unchecked for ordinary player access.
+                            </Typography>
+                            <Typography variant="body2">
+                                To remove this permission or recover a lost device, create a new invitation with the same
+                                player name and the permission you want. Claiming it disconnects the previous device.
+                                Disconnect paired devices below to revoke everyone's access immediately.
+                            </Typography>
+                        </>
                     )}
                     {error && (
                         <Alert severity="error">
