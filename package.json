@@ -2,6 +2,7 @@
     "name": "tight",
     "version": "0.0.1",
     "private": true,
+    "packageManager": "npm@11.9.0",
     "exports": "./index.jsx",
     "scripts": {
         "clean:server": "rimraf ./build/server.js ./build/backend.js && rimraf ./build/hot",

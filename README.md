@@ -17,7 +17,9 @@ To use HTTP instead, set the environment variable TIGHT_USE_HTTP=true.
 
 `npm ci --legacy-peer-deps`
 
-Use Node 24.19.0 (recommended) or at least 22.15.0. CI covers both versions. The legacy peer-dependency option is required by the current dependency graph.
+Use Node 24.19.0 (`.nvmrc`) and npm 11.9.0 (`packageManager`). Install the pinned npm with `npm install --global npm@11.9.0`. CI also tests the minimum supported Node 22.15.0 with the same npm version, on Linux, and Node 24.19.0 on Windows.
+
+The checked-in `.npmrc` enables `legacy-peer-deps` for every install: `@mui/styles@5.15.12` still declares React 17 while the app uses React 18. This preserves the tested graph while that styling dependency remains. Use `npm ci` for normal setup; dependency changes must commit both manifests and pass the application suites. CI rejects manifest changes during installation.
 
 ### 2. Build server and client
 
