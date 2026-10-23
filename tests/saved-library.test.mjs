@@ -158,3 +158,22 @@ test('invalid library metadata prevents startup without replacing the original d
     });
     assert.deepEqual(await readFile(filename), original);
 });
+
+test('invalid version-four library metadata fails before migration changes the original database', async t => {
+    const f = await fixture(t);
+    await f.json('game/create', {});
+    await f.stop();
+    f.sql(db => {
+        db.exec('ALTER TABLE access_sessions DROP COLUMN table_editing; PRAGMA user_version=4');
+        db.prepare('UPDATE games SET name=?').run('x'.repeat(81));
+    });
+    const filename = path.join(f.directory, 'games.sqlite');
+    const original = await readFile(filename);
+    await assert.rejects(f.start(), error => {
+        assert.equal(error.name, 'ZodError');
+        assert.match(error.message, /"name"/);
+        return true;
+    });
+    assert.deepEqual(await readFile(filename), original);
+    f.sql(db => assert.equal(db.prepare('PRAGMA user_version').get().user_version, 4));
+});

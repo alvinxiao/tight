@@ -76,6 +76,7 @@ export class GameStore {
                 const games = this.readGames();
                 if (version >= 2) this.validateAccessSessions(games);
                 if (version >= 3) this.validateCommandStorage(games);
+                if (version === 4) this.savedGames();
                 this.backupMigration(version);
                 if (version === 1) this.createAccessSchema();
                 if (version < 3) this.createCommandSchema();
