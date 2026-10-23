@@ -1,16 +1,29 @@
-const { app, BrowserWindow, dialog, session, utilityProcess, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, session, utilityProcess, ipcMain, Menu, powerMonitor } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { createSharingPreferences } = require('./sharing-preference.cjs');
+const { createDiagnostics, errorCode } = require('./diagnostics.cjs');
 
 app.setName('TIGHT');
 app.setAppUserModelId('org.alvinxiao.tight');
 if (process.env.TIGHT_DATA_DIR) {
     const profile = path.join(path.resolve(process.env.TIGHT_DATA_DIR), 'desktop-profile');
-    fs.mkdirSync(profile, { recursive: true });
-    app.setPath('userData', profile);
+    try {
+        fs.mkdirSync(profile, { recursive: true });
+        app.setPath('userData', profile);
+    } catch {
+        // Keep native recovery and export available when the game folder cannot be opened.
+    }
 }
 
+const diagnostics = createDiagnostics(
+    path.join(
+        process.env.TIGHT_DATA_DIR ? path.resolve(process.env.TIGHT_DATA_DIR) : app.getPath('userData'),
+        'diagnostics',
+    ),
+);
+let backendState = 'stopped';
+let powerChanges = Promise.resolve();
 let window;
 let child;
 let quitting = false;
@@ -22,38 +35,39 @@ let sharingRestoreError = null;
 let sharingPreferences;
 const sharingPreferencePath = () => path.join(app.getPath('userData'), 'sharing.json');
 const sharingStatus = value => ({ ...value, ...(sharingRestoreError ? { restoreError: sharingRestoreError } : {}) });
-let hostingRequestId = 0;
-const hostingRequests = new Map();
+let backendRequestId = 0;
+const backendRequests = new Map();
 const expectedExits = new WeakSet();
 
-function requestHosting(address, change) {
+function requestBackend(address, change, type = 'hosting') {
     const current = child;
     if (!current || quitting) return Promise.reject(new Error('The game server is not running.'));
     return new Promise((resolve, reject) => {
-        const id = ++hostingRequestId;
+        const id = ++backendRequestId;
         const timer = setTimeout(() => {
-            hostingRequests.delete(id);
+            backendRequests.delete(id);
             reject(new Error('The host did not respond. Refresh the network list.'));
         }, 10000);
-        hostingRequests.set(id, { child: current, resolve, reject, timer });
+        backendRequests.set(id, { child: current, type, resolve, reject, timer });
         try {
-            current.postMessage({ type: 'hosting', id, change, address });
+            current.postMessage({ type, id, change, address });
         } catch (error) {
             clearTimeout(timer);
-            hostingRequests.delete(id);
+            backendRequests.delete(id);
             reject(error);
         }
     });
 }
-function hostingReply(current, message) {
-    if (!message || message.type !== 'hosting' || !Number.isSafeInteger(message.id)) return;
-    const pending = hostingRequests.get(message.id);
-    if (!pending || pending.child !== current) return;
+function backendReply(current, message) {
+    if (!message || !['hosting', 'diagnostics'].includes(message.type) || !Number.isSafeInteger(message.id)) return;
+    const pending = backendRequests.get(message.id);
+    if (!pending || pending.child !== current || pending.type !== message.type) return;
     clearTimeout(pending.timer);
-    hostingRequests.delete(message.id);
-    if (typeof message.error === 'string') pending.reject(new Error(message.error));
+    backendRequests.delete(message.id);
+    if (typeof message.error === 'string')
+        pending.reject(Object.assign(new Error(message.error), { code: errorCode(message) }));
     else {
-        if (window && !window.isDestroyed())
+        if (message.type === 'hosting' && window && !window.isDestroyed())
             window.setTitle(message.value?.mode === 'lan' ? 'TIGHT (Wi-Fi sharing)' : 'TIGHT (local only)');
         pending.resolve(message.value);
     }
@@ -100,6 +114,7 @@ async function stopBackend() {
     expectedExits.add(current);
     await new Promise(resolve => {
         const timeout = setTimeout(() => {
+            diagnostics.record('backend.stop-timeout');
             current.kill();
         }, 5000);
         current.once('exit', () => {
@@ -117,6 +132,8 @@ async function stopBackend() {
 
 function startBackend() {
     activeHostToken = undefined;
+    backendState = 'starting';
+    diagnostics.record('backend.starting');
     return new Promise((resolve, reject) => {
         const env = { ...process.env, TIGHT_USE_HTTP: 'true' };
         delete env.NODE_OPTIONS;
@@ -136,8 +153,12 @@ function startBackend() {
             reject(new Error('The game server did not start in time.'));
         }, 20000);
         current.on('message', message => {
+            if (message?.type === 'diagnostic') {
+                if (message.event === 'backend.start-failed') diagnostics.record(message.event, message.code);
+                return;
+            }
             if (ready) {
-                hostingReply(current, message);
+                backendReply(current, message);
                 return;
             }
             if (!isReady(message)) {
@@ -146,16 +167,22 @@ function startBackend() {
                 return;
             }
             ready = true;
+            backendState = 'ready';
+            diagnostics.record('backend.ready');
             clearTimeout(timeout);
             resolve({ origin: message.origin, hostToken: message.hostToken });
         });
         current.once('exit', () => {
+            backendState = 'stopped';
+            diagnostics.record(
+                expectedExits.has(current) ? 'backend.stopped' : ready ? 'backend.crashed' : 'backend.start-failed',
+            );
             clearTimeout(timeout);
-            for (const [id, pending] of hostingRequests)
+            for (const [id, pending] of backendRequests)
                 if (pending.child === current) {
                     clearTimeout(pending.timer);
                     pending.reject(new Error('The game server stopped.'));
-                    hostingRequests.delete(id);
+                    backendRequests.delete(id);
                 }
             if (child === current) child = undefined;
             if (!ready)
@@ -178,13 +205,16 @@ async function recover(message) {
         type: 'error',
         title: 'TIGHT could not host games',
         message,
-        buttons: ['Restart server', 'Quit'],
+        buttons: ['Restart server', 'Quit', 'Export diagnostics'],
         defaultId: 0,
         cancelId: 1,
     });
     recovering = false;
     if (result.response === 0) void launch();
-    else {
+    else if (result.response === 2) {
+        await exportDiagnostics();
+        void recover(message);
+    } else {
         quitting = true;
         await rememberSharing();
         await stopBackend();
@@ -211,7 +241,11 @@ function configureWindow(origin) {
             devTools: !app.isPackaged,
         },
     });
-    window.removeMenu();
+    Menu.setApplicationMenu(
+        Menu.buildFromTemplate([
+            { label: 'Help', submenu: [{ label: 'Export diagnostics...', click: () => void exportDiagnostics() }] },
+        ]),
+    );
     window.on('page-title-updated', event => event.preventDefault());
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     const guardNavigation = event => {
@@ -223,6 +257,7 @@ function configureWindow(origin) {
     window.webContents.on('will-navigate', guardNavigation);
     window.webContents.on('will-redirect', guardNavigation);
     window.webContents.on('will-attach-webview', event => event.preventDefault());
+    window.on('session-end', () => void stopForSystemShutdown());
     window.on('close', event => {
         if (!quitting) {
             event.preventDefault();
@@ -251,14 +286,16 @@ async function launch() {
         });
         sharingRestoreError = await sharingPreferences.restore();
         await configureWindow(origin);
-        await requestHosting(null, false);
+        await requestBackend(null, false);
     } catch (error) {
         void recover(error instanceof Error ? error.message : 'Could not start TIGHT.');
     }
 }
 
-async function rememberSharing() {
+async function rememberSharing(interactive = true) {
     if (await sharingPreferences.prepareQuit()) return;
+    diagnostics.record('sharing.failed');
+    if (!interactive) return;
     await dialog.showMessageBox({
         type: 'warning',
         title: 'Wi-Fi sharing could not be remembered',
@@ -268,14 +305,55 @@ async function rememberSharing() {
     });
 }
 
+async function exportDiagnostics() {
+    let status = { storage: 'unavailable', sharing: 'unknown' };
+    try {
+        status = await requestBackend(null, false, 'diagnostics');
+    } catch {}
+    const report = diagnostics.exportReport(
+        { app: app.getVersion(), electron: process.versions.electron, node: process.versions.node },
+        { backend: backendState, ...status },
+    );
+    const result = await dialog.showSaveDialog({
+        title: 'Export TIGHT diagnostics',
+        defaultPath: 'TIGHT-diagnostics.json',
+        filters: [{ name: 'JSON diagnostics', extensions: ['json'] }],
+    });
+    if (result.canceled || !result.filePath) return;
+    try {
+        await fs.promises.writeFile(result.filePath, JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
+        diagnostics.record('diagnostics.exported');
+    } catch {
+        await dialog.showMessageBox({
+            type: 'error',
+            title: 'Could not export diagnostics',
+            message: 'Choose a writable folder and try again.',
+        });
+    }
+}
+
+async function stopForSystemShutdown() {
+    if (quitting) return;
+    quitting = true;
+    await rememberSharing(false);
+    await stopBackend();
+    diagnostics.record('app.shutdown');
+    app.quit();
+}
+
 async function requestQuit() {
     if (quitPrompt || quitting) return;
     quitPrompt = true;
+    diagnostics.record('app.quit-requested');
+    let connectedPlayers;
+    try {
+        connectedPlayers = (await requestBackend(null, false, 'diagnostics')).connectedPlayers;
+    } catch {}
     const options = {
         type: 'question',
         title: 'Close TIGHT?',
         message: 'Close TIGHT and stop hosting?',
-        detail: 'Committed games are saved. Players will lose their connection until you reopen TIGHT.',
+        detail: `${Number.isSafeInteger(connectedPlayers) ? `Connected paired player devices: ${connectedPlayers}. ` : ''}Committed games are saved. Players will lose their connection until you reopen TIGHT.`,
         buttons: ['Keep TIGHT open', 'Quit and save'],
         defaultId: 0,
         cancelId: 0,
@@ -288,12 +366,14 @@ async function requestQuit() {
         quitting = true;
         await rememberSharing();
         await stopBackend();
+        diagnostics.record('app.shutdown');
         app.quit();
     }
 }
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
+    diagnostics.record('app.started');
     app.on('second-instance', () => {
         if (window) {
             if (window.isMinimized()) window.restore();
@@ -308,18 +388,59 @@ else {
         }
     });
     app.whenReady().then(() => {
-        sharingPreferences = createSharingPreferences(sharingPreferencePath(), requestHosting);
+        sharingPreferences = createSharingPreferences(sharingPreferencePath(), requestBackend);
+        powerMonitor.on('suspend', () => {
+            diagnostics.record('app.suspended');
+            powerChanges = powerChanges
+                .then(async () => {
+                    if (!child || quitting) return;
+                    const hosting = await requestBackend(null, false);
+                    if (hosting.mode === 'lan') await requestBackend(null, true);
+                })
+                .catch(() => diagnostics.record('sharing.failed'));
+        });
+        powerMonitor.on('resume', () => {
+            diagnostics.record('app.resumed');
+            powerChanges = powerChanges
+                .then(async () => {
+                    if (!child || quitting) return;
+                    try {
+                        sharingRestoreError = await sharingPreferences.restore();
+                        if (sharingRestoreError) throw new Error('Sharing could not resume.');
+                    } catch {
+                        diagnostics.record('sharing.resume-failed');
+                        if (window && !window.isDestroyed())
+                            await dialog.showMessageBox(window, {
+                                type: 'warning',
+                                title: 'Check Wi-Fi sharing',
+                                message: 'The shared network changed while this PC was asleep.',
+                                detail: 'Open Wi-Fi sharing and choose the current network to reconnect players.',
+                            });
+                    }
+                })
+                .catch(() => diagnostics.record('sharing.resume-failed'));
+        });
+        powerMonitor.on('shutdown', event => {
+            event.preventDefault();
+            void stopForSystemShutdown();
+        });
         ipcMain.handle('tight:hosting', async event => {
             await verifyHostFrame(event);
-            return sharingStatus(await requestHosting(null, false));
+            return sharingStatus(await requestBackend(null, false));
         });
         ipcMain.handle('tight:set-hosting', async (event, address) => {
             await verifyHostFrame(event);
             if (address !== null && (typeof address !== 'string' || address.length > 64))
                 throw new Error('Invalid network selection.');
-            const value = await sharingPreferences.change(address);
-            sharingRestoreError = null;
-            return sharingStatus(value);
+            try {
+                const value = await sharingPreferences.change(address);
+                sharingRestoreError = null;
+                diagnostics.record(address ? 'sharing.enabled' : 'sharing.disabled');
+                return sharingStatus(value);
+            } catch (error) {
+                diagnostics.record('sharing.failed', errorCode(error));
+                throw error;
+            }
         });
         session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
         session.defaultSession.setPermissionCheckHandler(() => false);

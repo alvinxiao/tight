@@ -341,3 +341,93 @@ test('an unavailable remembered adapter stays local and explains how to recover 
         await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
 });
+
+test('native diagnostics export excludes private data and sleep restores the selected sharing network', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'tight diagnostics-'));
+    let app: ElectronApplication | undefined;
+    try {
+        app = await launch(directory);
+        const page = await app.firstWindow();
+        await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
+        const hosting = hostingSchema.parse(await page.evaluate(() => window.tightDesktop?.getHosting()));
+        const adapter = hosting.interfaces[0];
+        if (adapter) {
+            await page.evaluate(address => window.tightDesktop?.setHosting(address), adapter.address);
+            await app.evaluate(({ powerMonitor }) => powerMonitor.emit('suspend'));
+            await expect
+                .poll(
+                    async () => hostingSchema.parse(await page.evaluate(() => window.tightDesktop?.getHosting())).mode,
+                )
+                .toBe('local');
+            await app.evaluate(({ powerMonitor }) => powerMonitor.emit('resume'));
+            await expect
+                .poll(
+                    async () => hostingSchema.parse(await page.evaluate(() => window.tightDesktop?.getHosting())).mode,
+                )
+                .toBe('lan');
+        }
+        const exported = path.join(directory, 'support.json');
+        await app.evaluate(({ dialog }, filename) => {
+            dialog.showSaveDialog = async () => ({ canceled: false, filePath: filename });
+        }, exported);
+        await app.evaluate(({ Menu }) => {
+            const help = Menu.getApplicationMenu()?.items.find(item => item.label === 'Help');
+            const command = help?.submenu?.items.find(item => item.label === 'Export diagnostics...');
+            if (!command) throw new Error('Missing diagnostic export command');
+            command.click();
+        });
+        const { readFile } = await import('node:fs/promises');
+        await expect(async () => {
+            const report: unknown = JSON.parse(await readFile(exported, 'utf8'));
+            expect(report).toMatchObject({
+                format: 1,
+                host: { backend: 'ready', storage: 'open', connections: 1, connectedPlayers: 0 },
+            });
+        }).toPass();
+        const report = await readFile(exported, 'utf8');
+        const cookie = (await page.context().cookies()).find(value => value.name === 'tight-session');
+        expect(cookie?.value).toBeDefined();
+        expect(report).not.toContain(cookie?.value || 'missing-host-cookie');
+        expect(report).not.toContain(directory);
+        expect(report).not.toContain(new URL(page.url()).hostname);
+        expect(report).toContain('backend.ready');
+        if (adapter) expect(report).toContain('app.resumed');
+    } finally {
+        if (app) await quit(app);
+        await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+});
+
+test('ending the operating-system session stops hosting without a confirmation dialog', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'tight session-end-'));
+    let app: ElectronApplication | undefined;
+    try {
+        app = await launch(directory);
+        const page = await app.firstWindow();
+        await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
+        const adapter = hostingSchema.parse(await page.evaluate(() => window.tightDesktop?.getHosting())).interfaces[0];
+        if (adapter) await page.evaluate(address => window.tightDesktop?.setHosting(address), adapter.address);
+        const origin = new URL(page.url()).origin;
+        const created = await page.request.post(`${origin}/api/game/create`, { data: { numPlayers: 1 } });
+        expect(created.ok()).toBe(true);
+        const id: unknown = await created.json();
+        if (typeof id !== 'string') throw new Error('Missing saved game code');
+        const closed = app.waitForEvent('close');
+        await app.evaluate(({ BrowserWindow, dialog }) => {
+            dialog.showMessageBox = async () => {
+                throw new Error('Shutdown must not wait for a confirmation');
+            };
+            BrowserWindow.getAllWindows()[0].emit('session-end');
+        });
+        await closed;
+        app = undefined;
+        await expect(fetch(origin, { signal: AbortSignal.timeout(1000) })).rejects.toThrow();
+        app = await launch(directory);
+        const resumed = await app.firstWindow();
+        await expect(resumed.getByRole('article', { name: `Saved game ${id}`, exact: true })).toBeVisible();
+        if (adapter) expect(hostingSchema.parse(await resumed.evaluate(() => window.tightDesktop?.getHosting())).mode).toBe('lan');
+    } finally {
+        if (app) await quit(app);
+        await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+});

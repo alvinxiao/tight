@@ -44,3 +44,5 @@ Linux is a test environment, not a supported release target. A local virtual dis
 On this cloud proxy, Electron binary downloads need Node's proxy support: set `NODE_USE_ENV_PROXY=1` and `electron_config_cache=/workspace/.cache/electron` for the download or packaging command. Keep the configured CA trust and proxy settings. Normal Windows CI uses its standard network configuration.
 
 Device pairing uses host-issued one-use invitations. The desktop installs its host cookie through native IPC before opening the UI; it never includes that credential in an invitation link. With sharing enabled, invitations use the selected LAN address. See [access sessions](access-sessions.md) and [Wi-Fi sharing](lan-hosting.md).
+
+See [host diagnostics](host-diagnostics.md) for the native support export, bounded lifecycle logs, and sleep/resume behavior.

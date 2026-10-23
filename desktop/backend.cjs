@@ -1,5 +1,6 @@
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { errorCode } = require('./diagnostics.cjs');
 
 (async () => {
     const { startBackend, defaultDataDirectory } = await import(
@@ -26,7 +27,31 @@ const { pathToFileURL } = require('node:url');
                         : error instanceof Error
                           ? error.message
                           : 'Could not change Wi-Fi sharing.';
-                process.parentPort.postMessage({ type: 'hosting', id: message.id, error: detail });
+                process.parentPort.postMessage({
+                    type: 'hosting',
+                    id: message.id,
+                    error: detail,
+                    code: errorCode(error),
+                });
+            }
+        }
+        if (message?.type === 'diagnostics' && Number.isSafeInteger(message.id) && message.id > 0) {
+            try {
+                process.parentPort.postMessage({
+                    type: 'diagnostics',
+                    id: message.id,
+                    value: {
+                        ...backend.getDiagnostics(),
+                        sharing: backend.getHosting().mode,
+                        adapters: backend.getHosting().interfaces.length,
+                    },
+                });
+            } catch {
+                process.parentPort.postMessage({
+                    type: 'diagnostics',
+                    id: message.id,
+                    error: 'Could not read host status.',
+                });
             }
         }
         if (message?.type === 'stop') {
@@ -46,6 +71,7 @@ const { pathToFileURL } = require('node:url');
         hostToken: backend.hostToken,
     });
 })().catch(error => {
+    process.parentPort.postMessage({ type: 'diagnostic', event: 'backend.start-failed', code: errorCode(error) });
     console.error('Could not start backend', error);
     process.exit(1);
 });
