@@ -13,6 +13,7 @@ const EVENTS = new Set([
     'backend.stopped',
     'backend.crashed',
     'backend.stop-timeout',
+    'storage.write-failed',
     'sharing.enabled',
     'sharing.disabled',
     'sharing.failed',

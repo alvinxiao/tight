@@ -6,7 +6,13 @@ const { errorCode } = require('./diagnostics.cjs');
     const { startBackend, defaultDataDirectory } = await import(
         pathToFileURL(path.join(__dirname, '../build/desktop-backend.js')).href
     );
-    const backend = await startBackend({ port: 0, host: '127.0.0.1', dataDirectory: defaultDataDirectory() });
+    const backend = await startBackend({
+        port: 0,
+        host: '127.0.0.1',
+        dataDirectory: defaultDataDirectory(),
+        onStorageWriteError: error =>
+            process.parentPort.postMessage({ type: 'diagnostic', event: 'storage.write-failed', code: errorCode(error) }),
+    });
     process.parentPort.on('message', async event => {
         const message = event.data;
         if (

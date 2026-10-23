@@ -49,7 +49,10 @@ export type CommandCommit =
 /** One host owns the database for its lifetime. SQLite releases the lock after a crash. */
 export class GameStore {
     private readonly database: DatabaseSync;
-    constructor(private readonly directory: string) {
+    constructor(
+        private readonly directory: string,
+        private readonly onWriteError: (error: unknown) => void = () => {},
+    ) {
         mkdirSync(directory, { recursive: true, mode: 0o700 });
         this.database = new DatabaseSync(path.join(directory, 'games.sqlite'));
         try {
@@ -80,6 +83,27 @@ export class GameStore {
             this.database.close();
             throw error;
         }
+    }
+    private writeError(cause: unknown): StorageError {
+        if (cause instanceof StorageError) return cause;
+        try {
+            this.onWriteError(cause);
+        } catch {
+            // Diagnostic observers must not interrupt rollback or replace the storage failure.
+        }
+        return new StorageError(cause);
+    }
+    private failTransaction(cause: unknown, transaction: boolean): never {
+        const failure = cause instanceof CommandRejected ? cause : this.writeError(cause);
+        if (transaction) {
+            try {
+                this.database.exec('ROLLBACK');
+            } catch (rollbackError) {
+                // SQLite may already have rolled back. Preserve the original write failure.
+                if (failure instanceof CommandRejected) throw this.writeError(rollbackError);
+            }
+        }
+        throw failure;
     }
     close(): void {
         this.database.close();
@@ -210,7 +234,7 @@ export class GameStore {
         try {
             this.database.prepare('DELETE FROM access_sessions WHERE game_id=?').run(gameId);
         } catch (cause) {
-            throw new StorageError(cause);
+            throw this.writeError(cause);
         }
     }
     saveAccessSession(hash: string, session: GuestSession): void {
@@ -227,8 +251,7 @@ export class GameStore {
                 .run(hash, session.gameId, session.role, session.role === 'player' ? session.playerId : null);
             this.database.exec('COMMIT');
         } catch (cause) {
-            if (transaction) this.database.exec('ROLLBACK');
-            throw new StorageError(cause);
+            this.failTransaction(cause, transaction);
         }
     }
     save(game: Game): Game {
@@ -245,7 +268,7 @@ export class GameStore {
                 .run(game.id, snapshot, randomUUID());
             return saved;
         } catch (cause) {
-            throw new StorageError(cause);
+            throw this.writeError(cause);
         }
     }
     commitCommand(id: string, identity: CommandIdentity, change: () => Game): CommandCommit {
@@ -301,16 +324,14 @@ export class GameStore {
             this.database.exec('COMMIT');
             return result;
         } catch (cause) {
-            if (transaction) this.database.exec('ROLLBACK');
-            if (cause instanceof CommandRejected) throw cause;
-            throw new StorageError(cause);
+            this.failTransaction(cause, transaction);
         }
     }
     delete(id: string): void {
         try {
             this.database.prepare('DELETE FROM games WHERE id=?').run(id);
         } catch (cause) {
-            throw new StorageError(cause);
+            throw this.writeError(cause);
         }
     }
 }

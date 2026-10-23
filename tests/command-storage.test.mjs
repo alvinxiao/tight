@@ -34,9 +34,9 @@ async function fixture(t) {
     ).json();
     const { game } = await (await fetch(`${backend.origin}/api/game/export?gameId=${id}`, { headers })).json();
     await backend.stop();
-    const open = () => {
+    const open = onWriteError => {
         assert.equal(store, undefined);
-        store = new GameStore(directory);
+        store = new GameStore(directory, onWriteError);
         store.load();
         return store;
     };
@@ -289,4 +289,34 @@ test('invalid persisted command receipts fail loading without replacing the orig
         store.close();
     }
     assert.deepEqual(await readFile(filename), original);
+});
+
+
+test('nested command save failures notify once and a broken diagnostic observer cannot change rollback', async t => {
+    const f = await fixture(t);
+    f.sql(db => db.exec("CREATE TRIGGER fail_save BEFORE UPDATE ON games BEGIN SELECT RAISE(ABORT, 'PRIVATE storage detail'); END"));
+    const failures = [];
+    const store = f.open(error => {
+        failures.push(error);
+        throw new Error('observer failed');
+    });
+    const version = store.version(f.game.id);
+    assert.throws(() => store.commitCommand(f.game.id, identity(version), () => scored(f.game, 3)), /Could not save game/);
+    assert.equal(failures.length, 1);
+    assert.match(failures[0].message, /PRIVATE storage detail/);
+    assert.deepEqual(store.version(f.game.id), version);
+    assert.deepEqual(store.load()[f.game.id], f.game);
+});
+
+test('SQLite automatic rollback retains the original write failure and its diagnostic notification', async t => {
+    const f = await fixture(t);
+    f.sql(db => db.exec("CREATE TRIGGER fail_receipt BEFORE INSERT ON command_receipts BEGIN SELECT RAISE(ROLLBACK, 'PRIVATE automatic rollback'); END"));
+    const failures = [];
+    const store = f.open(error => failures.push(error));
+    const version = store.version(f.game.id);
+    assert.throws(() => store.commitCommand(f.game.id, identity(version), () => scored(f.game, 3)), /Could not save game/);
+    assert.equal(failures.length, 1);
+    assert.match(failures[0].message, /PRIVATE automatic rollback/);
+    assert.deepEqual(store.version(f.game.id), version);
+    assert.deepEqual(store.load()[f.game.id], f.game);
 });

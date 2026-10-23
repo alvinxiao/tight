@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { DatabaseSync } from 'node:sqlite';
 import { createRequire } from 'node:module';
 import { hostingSchema } from '../../src/common/hosting.js';
 import { PNG } from 'pngjs';
@@ -426,6 +427,57 @@ test('ending the operating-system session stops hosting without a confirmation d
         const resumed = await app.firstWindow();
         await expect(resumed.getByRole('article', { name: `Saved game ${id}`, exact: true })).toBeVisible();
         if (adapter) expect(hostingSchema.parse(await resumed.evaluate(() => window.tightDesktop?.getHosting())).mode).toBe('lan');
+    } finally {
+        if (app) await quit(app);
+        await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+});
+
+
+test('a runtime save failure reaches the native diagnostic export without private error details', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'tight write failure-'));
+    let app: ElectronApplication | undefined;
+    try {
+        app = await launch(directory);
+        await expect((await app.firstWindow()).getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
+        await quit(app);
+        app = undefined;
+        const db = new DatabaseSync(path.join(directory, 'games.sqlite'));
+        try {
+            db.exec("CREATE TRIGGER fail_save BEFORE INSERT ON games BEGIN SELECT RAISE(ABORT, 'PRIVATE SQL detail player secret /private/path'); END");
+        } finally {
+            db.close();
+        }
+        app = await launch(directory);
+        const page = await app.firstWindow();
+        await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
+        const origin = new URL(page.url()).origin;
+        const response = await page.request.post(`${origin}/api/game/create`, { data: {} });
+        expect(response.status()).toBe(503);
+        const exported = path.join(directory, 'write-failure.json');
+        await app.evaluate(({ dialog }, filename) => {
+            dialog.showSaveDialog = async () => ({ canceled: false, filePath: filename });
+        }, exported);
+        await app.evaluate(({ Menu }) => {
+            const command = Menu.getApplicationMenu()?.items.find(item => item.label === 'Help')?.submenu?.items
+                .find(item => item.label === 'Export diagnostics...');
+            if (!command) throw new Error('Missing diagnostic export command');
+            command.click();
+        });
+        const { readFile } = await import('node:fs/promises');
+        await expect(async () => {
+            const report: unknown = JSON.parse(await readFile(exported, 'utf8'));
+            expect(report).toMatchObject({ events: expect.arrayContaining([
+                expect.objectContaining({ event: 'storage.write-failed', code: 'ERR_SQLITE_ERROR' }),
+            ]) });
+        }).toPass();
+        const report = await readFile(exported, 'utf8');
+        expect(report).not.toContain('PRIVATE SQL detail');
+        expect(report).not.toContain('/private/path');
+        expect(report).not.toContain(directory);
+        const cookie = (await page.context().cookies()).find(value => value.name === 'tight-session');
+        expect(cookie?.value).toBeDefined();
+        expect(report).not.toContain(cookie?.value || 'missing-host-cookie');
     } finally {
         if (app) await quit(app);
         await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
