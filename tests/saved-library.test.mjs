@@ -124,7 +124,7 @@ test('version-three migration preserves game versions and backs up the original 
     const before = await f.json(`game/export?gameId=${id}`);
     const version = (await f.snapshot(id)).gameVersion;
     await f.stop();
-    f.sql(db => db.exec('ALTER TABLE games DROP COLUMN name; ALTER TABLE games DROP COLUMN archived; ALTER TABLE games DROP COLUMN last_played; PRAGMA user_version=3'));
+    f.sql(db => db.exec('ALTER TABLE access_sessions DROP COLUMN table_editing; ALTER TABLE games DROP COLUMN name; ALTER TABLE games DROP COLUMN archived; ALTER TABLE games DROP COLUMN last_played; PRAGMA user_version=3'));
     await f.start();
     assert.deepEqual(await f.json(`game/export?gameId=${id}`), before);
     assert.deepEqual((await f.snapshot(id)).gameVersion, version);

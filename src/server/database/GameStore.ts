@@ -278,7 +278,7 @@ export class GameStore {
             role: row.role,
             gameId: row.game_id,
             ...(row.role === 'player' ? { playerId: row.player_id } : {}),
-                ...(row.table_editing === 1 ? { tableEditing: true } : {}),
+            ...(row.table_editing === 1 ? { tableEditing: true } : {}),
         });
     }
     revokeAccessSessions(gameId: string): void {

@@ -49,6 +49,9 @@ export default function PairDeviceDialog({
         setRevoked(false);
         setConfirmRevoke(false);
     }, [open, name, role, tableEditing, baseOrigin]);
+    useEffect(() => {
+        setTableEditing(false);
+    }, [open, role]);
     const close = () => {
         cancel();
         onClose();
