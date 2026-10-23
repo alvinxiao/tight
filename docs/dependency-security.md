@@ -4,11 +4,11 @@ Run `npm ci --legacy-peer-deps`, `npm run audit:runtime`, and `npm audit` before
 
 The October 22, 2026 update removed unused `superagent`, `cors`, and `ip`, replaced the address lookup with Node's network-interface API, removed unused Babel CLI, and replaced nodemon with Node's built-in watch mode. Express, ws, Babel, lodash, React Router, webpack, and their transitive dependencies were updated. The development toolchain now requires Node 22.15 or later. CI covers that minimum and Node 24.19.
 
-## Remaining development advisories
+## Development dependency audit
 
-The complete installed graph reports four high-severity affected entries, all through webpack-dev-server 6.1.0: webpack-dev-server, http-proxy-middleware, micromatch, and braces. They share [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), stack exhaustion when parsing deeply nested glob patterns. The current upstream chain has no patched compatible release. Do not accept npm's proposed downgrade to webpack-dev-server 1.x.
+The development-only webpack-dev-server proxy was removed after its dependency chain retained [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm). Browser development now uses webpack watch mode, and the backend serves the generated assets from the same origin. Developers reload after browser rebuilds instead of using hot module replacement. The proxy, middleware, glob parser and their affected dependency entries are no longer needed.
 
-The application's development proxy patterns are fixed in `webpack.config.ts`; users cannot supply glob patterns through the game interface. The development server binds to 127.0.0.1. It is never included in the packaged desktop app or started by `npm start`, which runs the production server directly. Do not expose the development server to the LAN. This assessment expires November 22, 2026; recheck the advisory and upgrade or replace the development proxy before that date. Issue #5 remains open until this chain is fixed.
+Both the complete installed graph and the production-only graph must be audited before releases. The dependency removal preserves every production lockfile entry. CI still installs from the committed lockfile, builds the app, runs the protocol/browser/native suites, and generates runtime license notices for Windows.
 
 ## Windows dependency inventory and notices
 
@@ -18,4 +18,4 @@ The packaging script generates `runtime-dependencies.json` and `THIRD-PARTY-NOTI
 
 ## Installer build tool
 
-The installer uses electron-builder 26.15.3. Its app-builder-lib dependency is overridden to @electron/get 5.0.0, the same downloader major already used by the desktop packager. Earlier downloader versions pull an unpatched sprintf-js denial-of-service advisory through their proxy logger. This override removes that build-only chain and requires Node 22.12 or later; the project already requires 22.15. The downloader API loads on the minimum Node version, and Windows CI must build and exercise the resulting installer before this dependency change lands. The complete audit retains only the four development-server advisories described above. Recheck this override with each electron-builder update.
+The installer uses electron-builder 26.15.3. Its app-builder-lib dependency is overridden to @electron/get 5.0.0, the same downloader major already used by the desktop packager. Earlier downloader versions pull an unpatched sprintf-js denial-of-service advisory through their proxy logger. This override removes that build-only chain and requires Node 22.12 or later; the project already requires 22.15. The downloader API loads on the minimum Node version, and Windows CI must build and exercise the resulting installer before this dependency change lands. The development-server advisory chain has been removed as described above. Recheck this override with each electron-builder update.

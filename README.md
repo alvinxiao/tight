@@ -31,23 +31,13 @@ Server URL will be printed in the console.
 
 # Run Dev
 
-## Run each of the following commands in their own separate console.
+Install with `npm ci --legacy-peer-deps`, then run these in separate terminals:
 
-### 1. Run server in dev:
+1. `npm run server:dev` builds and watches the backend.
+2. `npm run client:dev` builds and watches the browser assets on disk.
+3. After both builds finish, run `npx cross-env TIGHT_USE_HTTP=true TIGHT_HOST=127.0.0.1 PORT=3000 TIGHT_DATA_DIR=.tight-data/dev npm run start:dev`.
 
-`npm run start:dev`
-
-Sometimes changes to server files don't hot reload correctly. Run `rs` in this console to restart the server.
-
-### 2. Build and watch server in dev
-
-`npm run server:dev`
-
-### 3. Build and watch client in dev:
-
-`npm run client:dev`
-
-Access the client at https://localhost:3001/
+Open the host-claim URL printed by the server to authorize the browser, then use `http://127.0.0.1:3000/`. This development command uses a separate data folder and binds to loopback. The backend serves the watched browser assets and API from the same origin. Reload the page after a browser rebuild; Node's watch mode restarts the backend when its bundle changes. A separate development proxy and hot module replacement are not used.
 
 # Regression tests
 
@@ -55,7 +45,7 @@ Run `npm test`. This builds the server and runs the Node test suite against a di
 
 The suite covers malformed WebSocket framing, payload limits, configured round limits, planet ownership, deletion broadcasts, API errors, and endpoint origins. CI runs installation, tests, and the client build on Linux and Windows. Native desktop packaging is tracked separately.
 
-`PORT=0` requests an available server port. The startup log reports the bound port. Both browser HTTP requests and WebSocket connections use the actual page origin. The client development server proxies `/api` and `/socket` to the backend on port 80 in HTTP mode, or port 443 in HTTPS mode.
+`PORT=0` requests an available server port. The startup log reports the bound port. Both browser HTTP requests and WebSocket connections use the actual page origin. Development browser assets, HTTP requests and WebSocket connections use the same backend origin.
 
 # Production-readiness work
 

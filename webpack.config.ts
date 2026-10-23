@@ -1,7 +1,6 @@
 import HtmlWebPackPlugin from 'html-webpack-plugin';
 import path from 'path';
 import { Configuration } from 'webpack';
-import { Configuration as ConfigurationDev } from 'webpack-dev-server';
 import nodeExternals from 'webpack-node-externals';
 
 const dev = process.env.NODE_ENV === 'development';
@@ -16,11 +15,7 @@ const serverDir = path.resolve(cwd, './src/server');
 
 const tsconfigFile = web ? path.resolve(cwd, 'tsconfig.web.json') : path.resolve(cwd, 'tsconfig.server.json');
 
-const isHttps = !(process.env.TIGHT_USE_HTTP?.toLowerCase() === 'true');
-const protocol = isHttps ? 'https' : 'http';
-const localhost = `${protocol}://localhost`;
-
-let config: Configuration | ConfigurationDev = {
+let config: Configuration = {
     target,
     mode,
     module: {
@@ -108,40 +103,6 @@ if (dev) {
         ...config,
         devtool: 'cheap-module-source-map',
     };
-
-    config.output = {
-        ...config.output,
-        hotUpdateChunkFilename: 'hot/[id].[fullhash].hot-update.js',
-        hotUpdateMainFilename: 'hot/[runtime].[fullhash].hot-update.json',
-    };
-
-    if (web) {
-        config.devServer = {
-            host: '127.0.0.1',
-            static: {
-                directory: path.resolve(cwd, 'dist'),
-            },
-            hot: true,
-            proxy: [
-                {
-                    context: ['/api', '/socket'],
-                    target: localhost,
-                    ws: true,
-                    secure: false,
-                    changeOrigin: true,
-                    headers: { Origin: localhost },
-                },
-                {
-                    context: '*',
-                    target: localhost,
-                    secure: false,
-                    changeOrigin: true,
-                    headers: { Origin: localhost },
-                },
-            ],
-            server: protocol,
-        };
-    }
 }
 
 export default config;
