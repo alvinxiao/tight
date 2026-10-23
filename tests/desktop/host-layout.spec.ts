@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron, ElectronApplication } from '@playwright/test';
+import { test, expect, _electron as electron, ElectronApplication, Page, WebSocket } from '@playwright/test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -10,6 +10,8 @@ const root = path.resolve(import.meta.dirname, '../..');
 test('the default desktop window shows all eight setup slots and actions without scrolling', async ({}, testInfo) => {
     const directory = await mkdtemp(path.join(tmpdir(), 'tight setup layout-'));
     let app: ElectronApplication | undefined;
+    let observedPage: Page | undefined;
+    const sockets: WebSocket[] = [];
     try {
         const executable: unknown = process.env.TIGHT_DESKTOP_EXECUTABLE || require('electron');
         if (typeof executable !== 'string') throw new Error('Expected Electron executable path');
@@ -22,7 +24,8 @@ test('the default desktop window shows all eight setup slots and actions without
             cwd: directory,
             env: { ...process.env, TIGHT_DATA_DIR: directory },
         });
-        const page = await app.firstWindow();
+        const page = observedPage = await app.firstWindow();
+        page.on('websocket', socket => sockets.push(socket));
         await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
         const origin = new URL(page.url()).origin;
         const response = await page.request.post(`${origin}/api/game/create`, { data: { numPlayers: 8 } });
@@ -46,6 +49,29 @@ test('the default desktop window shows all eight setup slots and actions without
         await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeInViewport();
         await expect(page.getByRole('button', { name: 'Pair a device', exact: true })).toBeInViewport();
         await page.screenshot({ path: testInfo.outputPath('desktop-eight-player-setup.png') });
+    } catch (error) {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            const detail = await Promise.race([
+                Promise.allSettled([
+                    observedPage?.evaluate(() => ({
+                        path: location.pathname, ready: document.readyState, visibility: document.visibilityState,
+                        body: document.body?.innerText.slice(0, 1500),
+                    })),
+                    app?.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => ({
+                        visible: window.isVisible(), minimized: window.isMinimized(),
+                        loading: window.webContents.isLoading(),
+                    }))),
+                ]),
+                new Promise(resolve => { timer = setTimeout(() => resolve('Diagnostic collection timed out'), 2000); }),
+            ]);
+            const report = JSON.stringify({ detail, observedSockets: sockets.map(socket => ({ closed: socket.isClosed() })) })
+                .replace(/[A-Za-z0-9_-]{43,}/g, '[redacted]');
+            await testInfo.attach('native-setup-failure', { body: report, contentType: 'application/json' });
+            throw new Error(`${error instanceof Error ? error.message : 'Native setup failed'}\nNative setup state: ${report}`);
+        } finally {
+            clearTimeout(timer);
+        }
     } finally {
         if (app) {
             await app.evaluate(async ({ dialog, app }) => {
