@@ -483,3 +483,35 @@ test('a runtime save failure reaches the native diagnostic export without privat
         await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
 });
+
+test('named and archived games remain available after the desktop is reopened', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'tight library-'));
+    let app: ElectronApplication | undefined;
+    try {
+        app = await launch(directory);
+        const page = await app.firstWindow();
+        await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
+        const origin = new URL(page.url()).origin;
+        const created = await page.request.post(`${origin}/api/game/create`, { data: { numPlayers: 2 } });
+        expect(created.ok()).toBe(true);
+        const id: unknown = await created.json();
+        if (typeof id !== 'string') throw new Error('Expected game code');
+        expect((await page.request.post(`${origin}/api/game/rename`, { data: { gameId: id, name: 'Saturday 银河' } })).ok()).toBe(true);
+        expect((await page.request.post(`${origin}/api/game/archive`, { data: { gameId: id, archived: true } })).ok()).toBe(true);
+        await quit(app);
+        app = undefined;
+        app = await launch(directory);
+        const reopened = await app.firstWindow();
+        await expect(reopened.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
+        const card = reopened.getByRole('article', { name: `Saved game ${id}`, exact: true });
+        await expect(card).toHaveCount(0);
+        await reopened.getByRole('checkbox', { name: 'Show archived games', exact: true }).check();
+        await expect(card.getByRole('heading', { name: 'Saturday 银河', exact: true })).toBeVisible();
+        await card.getByRole('button', { name: `Restore ${id}`, exact: true }).click();
+        await reopened.getByRole('checkbox', { name: 'Show archived games', exact: true }).uncheck();
+        await expect(card.getByRole('link', { name: `Resume ${id}`, exact: true })).toBeVisible();
+    } finally {
+        if (app) await quit(app);
+        await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+});

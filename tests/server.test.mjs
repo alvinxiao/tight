@@ -317,7 +317,7 @@ test('saved-game list returns summaries and reflects deletion', async t => {
     const { id } = await gameTest(t, { numPlayers: 2, numRounds: 3 });
     const games = await request('/game/list');
     const saved = games.find(game => game.id === id);
-    assert.deepEqual(Object.keys(saved).sort(), ['date', 'id', 'numRounds', 'players', 'round', 'state']);
+    assert.deepEqual(Object.keys(saved).sort(), ['archived', 'date', 'id', 'lastPlayed', 'name', 'numRounds', 'players', 'round', 'state']);
     assert.equal(saved.numRounds, 3);
     assert.equal(saved.round, 1);
     assert.equal(saved.state, 'setup');

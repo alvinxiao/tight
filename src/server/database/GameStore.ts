@@ -1,3 +1,4 @@
+import { SavedGameSummary, savedGameNameSchema } from 'common/savedGames.js';
 import { gameVersionSchema, GameVersion } from 'common/gameVersion.js';
 import { z } from 'zod';
 import { DatabaseSync } from 'node:sqlite';
@@ -68,14 +69,17 @@ export class GameStore {
                 this.database.exec('CREATE TABLE games (id TEXT PRIMARY KEY, snapshot TEXT NOT NULL)');
                 this.createAccessSchema();
                 this.createCommandSchema();
-            } else if (version === 1 || version === 2) {
+                this.createLibrarySchema();
+            } else if (version === 1 || version === 2 || version === 3) {
                 // Validate before VACUUM or schema writes so an invalid old save is preserved.
                 const games = this.readGames();
-                if (version === 2) this.validateAccessSessions(games);
+                if (version >= 2) this.validateAccessSessions(games);
+                if (version === 3) this.validateCommandStorage(games);
                 this.backupMigration(version);
                 if (version === 1) this.createAccessSchema();
-                this.createCommandSchema();
-            } else if (version !== 3) {
+                if (version < 3) this.createCommandSchema();
+                this.createLibrarySchema();
+            } else if (version !== 4) {
                 throw new Error('Unsupported game database version; use a compatible version of TIGHT');
             }
             this.database.exec('COMMIT; PRAGMA synchronous=FULL');
@@ -107,6 +111,42 @@ export class GameStore {
     }
     close(): void {
         this.database.close();
+    }
+    private createLibrarySchema(): void {
+        this.database.exec(`ALTER TABLE games ADD COLUMN name TEXT;
+            ALTER TABLE games ADD COLUMN archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0, 1));
+            ALTER TABLE games ADD COLUMN last_played INTEGER NOT NULL DEFAULT 0 CHECK(last_played >= 0);
+            PRAGMA user_version=4`);
+        const update = this.database.prepare('UPDATE games SET last_played=? WHERE id=?');
+        for (const game of Object.values(this.readGames())) update.run(game.date, game.id);
+    }
+    savedGames(): SavedGameSummary[] {
+        const games = this.database.prepare('SELECT id, snapshot, name, archived, last_played FROM games').all().map(raw => {
+            const row = z.object({
+                id: z.string(), snapshot: z.string(), name: savedGameNameSchema,
+                archived: z.union([z.literal(0), z.literal(1)]),
+                last_played: z.number().int().nonnegative(),
+            }).parse(raw);
+            const game = savedGameSchema.parse(JSON.parse(row.snapshot));
+            if (game.id !== row.id) throw new Error('Saved game ID mismatch');
+            return {
+                id: game.id, date: game.date, name: row.name, archived: row.archived === 1,
+                lastPlayed: row.last_played, round: game.status.round, numRounds: game.numRounds,
+                players: Object.keys(game.players),
+                state: game.status.ended ? 'finished' : game.status.started ? 'playing' : 'setup',
+            } satisfies SavedGameSummary;
+        });
+        return games.sort((a, b) => b.lastPlayed - a.lastPlayed || a.id.localeCompare(b.id));
+    }
+    organize(id: string, change: { name: string | null } | { archived: boolean }): boolean {
+        try {
+            const result = 'name' in change
+                ? this.database.prepare('UPDATE games SET name=? WHERE id=?').run(change.name, id)
+                : this.database.prepare('UPDATE games SET archived=? WHERE id=?').run(Number(change.archived), id);
+            return result.changes > 0;
+        } catch (cause) {
+            throw this.writeError(cause);
+        }
     }
     private createAccessSchema(): void {
         this.database.exec(`CREATE TABLE access_sessions (
@@ -202,6 +242,7 @@ export class GameStore {
         const games = this.readGames();
         this.validateAccessSessions(games);
         this.validateCommandStorage(games);
+        this.savedGames();
         if (Object.keys(games).length) {
             const backups = path.join(this.directory, 'backups');
             mkdirSync(backups, { recursive: true, mode: 0o700 });
@@ -261,11 +302,11 @@ export class GameStore {
         try {
             this.database
                 .prepare(
-                    `INSERT INTO games(id, snapshot, incarnation, revision) VALUES (?, ?, ?, 1)
-                    ON CONFLICT(id) DO UPDATE SET snapshot=excluded.snapshot, revision=games.revision+1
+                    `INSERT INTO games(id, snapshot, incarnation, revision, last_played) VALUES (?, ?, ?, 1, ?)
+                    ON CONFLICT(id) DO UPDATE SET snapshot=excluded.snapshot, revision=games.revision+1, last_played=MAX(games.last_played, excluded.last_played)
                     WHERE games.snapshot != excluded.snapshot`,
                 )
-                .run(game.id, snapshot, randomUUID());
+                .run(game.id, snapshot, randomUUID(), Date.now());
             return saved;
         } catch (cause) {
             throw this.writeError(cause);
