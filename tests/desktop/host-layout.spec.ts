@@ -33,9 +33,14 @@ test('the default desktop window shows all eight setup slots and actions without
         await page.getByRole('textbox', { name: 'Enter Name', exact: true }).fill('Desktop host');
         await page.getByRole('button', { name: 'Continue', exact: true }).click();
         await expect(page.getByRole('combobox', { name: /^Faction /u })).toHaveCount(8);
-        await expect.poll(() => page.evaluate(() => ({
-            width: innerWidth, height: innerHeight, overflow: Math.max(0, document.documentElement.scrollHeight - innerHeight),
-        }))).toEqual({ width: expect.any(Number), height: expect.any(Number), overflow: 0 });
+        await expect(async () => {
+            const bounds = await page.evaluate(() => ({
+                width: innerWidth,
+                height: innerHeight,
+                overflow: Math.max(0, document.documentElement.scrollHeight - innerHeight),
+            }));
+            expect(bounds.overflow, JSON.stringify(bounds)).toBe(0);
+        }).toPass();
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         await expect(page.getByRole('combobox', { name: 'Position for player slot 8', exact: true })).toBeInViewport();
         await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeInViewport();

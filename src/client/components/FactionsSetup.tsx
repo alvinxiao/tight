@@ -83,7 +83,7 @@ function FactionsSetup(props: FactionsSetupProps) {
             sx={{
                 '& .MuiOutlinedInput-root': { height: { md: 44 } },
                 '& .MuiSelect-select': { py: { md: '10.5px' } },
-                '& .MuiFormHelperText-root': { lineHeight: { md: '16px' }, mt: { md: '2px' } },
+                '& .MuiFormHelperText-root': { lineHeight: { md: '15px' }, mt: { md: '1px' } },
                 '& .MuiIconButton-root': { p: { md: 0.5 }, mr: { md: 3 }, minWidth: { md: 44 }, minHeight: { md: 44 } },
             }}
         >
