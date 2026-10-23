@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 const require = createRequire(import.meta.url);
@@ -28,6 +28,7 @@ test('diagnostic exports contain only named event codes and approved status fiel
     const report = diagnostics.exportReport(versions, state);
     assert.equal(JSON.stringify(report).includes('SECRET'), false);
     assert.equal(report.events.length, 3);
+    assert.equal(report.persistentLogs, true);
     assert.equal(report.versions.backend, versions.app);
     assert.equal(report.events[1].code, 'EADDRINUSE');
     assert.equal(report.events[2].code, undefined);
@@ -81,4 +82,28 @@ test('unwritable diagnostic storage keeps a bounded memory report without crashi
     const report = diagnostics.exportReport(versions, state);
     assert.equal(report.persistentLogs, false);
     assert.equal(report.events.length, 200);
+});
+
+test('export reports unreadable persistent logs and retains current-launch events', async t => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'tight-diagnostics-read-failure-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const diagnostics = createDiagnostics(directory);
+    diagnostics.record('backend.ready');
+    const file = path.join(directory, 'desktop-events.jsonl');
+    await rm(file);
+    await mkdir(file);
+    const report = diagnostics.exportReport(versions, state);
+    assert.equal(report.persistentLogs, false);
+    assert.deepEqual(report.events.map(value => value.event), ['backend.ready']);
+});
+
+test('oversized persistent logs are rejected without losing current-launch diagnostics', async t => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'tight-diagnostics-oversized-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const diagnostics = createDiagnostics(directory);
+    diagnostics.record('backend.start-failed', 'ENOSPC');
+    await writeFile(path.join(directory, 'desktop-events.jsonl'), 'x'.repeat(MAX_BYTES + 1));
+    const report = diagnostics.exportReport(versions, state);
+    assert.equal(report.persistentLogs, false);
+    assert.deepEqual(report.events.map(value => value.code), ['ENOSPC']);
 });

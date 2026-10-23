@@ -85,7 +85,11 @@ function createDiagnostics(directory) {
         const history = [];
         for (const suffix of ['.2', '.1', '']) {
             try {
-                if (fs.statSync(file + suffix).size > MAX_BYTES) continue;
+                const status = fs.statSync(file + suffix);
+                if (!status.isFile() || status.size > MAX_BYTES) {
+                    persistent = false;
+                    continue;
+                }
                 const bytes = fs.readFileSync(file + suffix);
                 for (const line of bytes.toString('utf8').split('\n')) {
                     try {
@@ -93,7 +97,9 @@ function createDiagnostics(directory) {
                         if (value) history.push(value);
                     } catch {}
                 }
-            } catch {}
+            } catch (error) {
+                if (error.code !== 'ENOENT') persistent = false;
+            }
         }
         return {
             format: 1,
