@@ -27,9 +27,9 @@ import { GuestSession } from 'common/session.js';
 let store: GameStore | null = null;
 let _games: GameMap = {};
 
-export function initializeGameStorage(directory: string): void {
+export function initializeGameStorage(directory: string, onWriteError?: (error: unknown) => void): void {
     if (store) throw new Error('Game storage is already initialized');
-    const next = new GameStore(directory);
+    const next = new GameStore(directory, onWriteError);
     try {
         _games = next.load();
         store = next;

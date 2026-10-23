@@ -154,7 +154,8 @@ function startBackend() {
         }, 20000);
         current.on('message', message => {
             if (message?.type === 'diagnostic') {
-                if (message.event === 'backend.start-failed') diagnostics.record(message.event, message.code);
+                if (['backend.start-failed', 'storage.write-failed'].includes(message.event))
+                    diagnostics.record(message.event, message.code);
                 return;
             }
             if (ready) {

@@ -24,6 +24,7 @@ export interface BackendOptions {
     host?: string;
     dataDirectory: string;
     hostToken?: string;
+    onStorageWriteError?: (error: unknown) => void;
 }
 
 export async function startBackend(options: BackendOptions) {
@@ -31,7 +32,7 @@ export async function startBackend(options: BackendOptions) {
         throw new Error('Invalid server port');
     const hostnames = trustedHostnames(options.host);
     const sessions = new AccessSessions(options.hostToken);
-    initializeGameStorage(options.dataDirectory);
+    initializeGameStorage(options.dataDirectory, options.onStorageWriteError);
     setDirty(false);
     try {
         const dirname = path.dirname(fileURLToPath(import.meta.url));

@@ -6,6 +6,8 @@ The report contains the app, bundled backend, Electron, and Node versions, the o
 
 The bundled backend uses the app version.
 
+Runtime save failures add a `storage.write-failed` event with an allowed operating-system or SQLite error code. Unknown codes become `UNKNOWN`. Raw error messages, including database paths and SQL text, never enter the report. A failed save remains unconfirmed or rejected as defined by the command protocol; diagnostics do not change that outcome. Nested save and command failures produce one event for the underlying failure.
+
 Lifecycle events cover startup, startup failure, bind failures, sharing changes, backend crashes, shutdown, sleep, and resume. Known operating-system error codes appear without their error messages. The report excludes cookies, host credentials, invitations, addresses, game codes, player names, game data, installation paths, and the data-folder path. It does not copy standard output, stack traces, request bodies, or the game database.
 
 The desktop stores up to three 64 KiB event files in a `diagnostics` folder inside its Electron profile. With `TIGHT_DATA_DIR`, they live in that data folder instead. Exports include at most the latest 200 valid events. Unwritable logging storage, unreadable log files, or log files exceeding the size limit do not stop hosting; the report marks persistent logs unavailable and includes at most 200 events retained in memory for the current launch.
