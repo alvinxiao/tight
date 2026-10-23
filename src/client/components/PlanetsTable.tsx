@@ -101,6 +101,7 @@ export interface PlanetsTableProps {
     filterByPlanetOnly?: boolean;
 
     showCheckbox?: boolean;
+    disabled?: boolean;
     selection?: string[];
     onSelectionChange?: (selection: string[]) => void;
     onPlanetClick?: (id: string) => void | null;
@@ -120,6 +121,7 @@ function PlanetsTable(props: PlanetsTableProps) {
         columns = DEFAULT_COLUMNS,
         filterByPlanetOnly,
         showCheckbox = false,
+        disabled = false,
         selection = [],
         onSelectionChange = () => {},
         onPlanetClick = () => {},
@@ -190,6 +192,7 @@ function PlanetsTable(props: PlanetsTableProps) {
 
     // Handle row click events
     const onRowClick = (name: string) => {
+        if (disabled) return;
         if (showCheckbox) {
             const index = selection.findIndex(s => s === name);
             if (index < 0) {
@@ -206,6 +209,7 @@ function PlanetsTable(props: PlanetsTableProps) {
 
     // Handle select/deselect all
     const onSelectAll = () => {
+        if (disabled) return;
         const newSelection = filteredSelection.length === names.length ? [] : names;
 
         let finalSelection = newSelection;
@@ -229,6 +233,7 @@ function PlanetsTable(props: PlanetsTableProps) {
         headerCheckbox = (
             <TableCell sx={{ top: FILTER_BY_NAME_HEIGHT }} padding="checkbox">
                 <Checkbox
+                    disabled={disabled}
                     indeterminate={filteredSelection.length > 0 && filteredSelection.length < names.length}
                     checked={filteredSelection.length > 0 && filteredSelection.length === names.length}
                     onChange={onSelectAll}
@@ -329,7 +334,7 @@ function PlanetsTable(props: PlanetsTableProps) {
                         if (showCheckbox) {
                             rowCheckbox = (
                                 <TableCell padding="checkbox">
-                                    <Checkbox checked={selection.includes(name)} />
+                                    <Checkbox disabled={disabled} checked={selection.includes(name)} />
                                 </TableCell>
                             );
                         }
@@ -338,6 +343,7 @@ function PlanetsTable(props: PlanetsTableProps) {
                         return (
                             <TableRow
                                 selected={selected}
+                                aria-disabled={disabled || undefined}
                                 classes={{ root: classes.tableRow }}
                                 key={name}
                                 onClick={e => onRowClick(name)}
@@ -347,7 +353,7 @@ function PlanetsTable(props: PlanetsTableProps) {
                                 <TableCell align="center">
                                     <Tooltip title="Edit">
                                         <IconButton
-                                            disabled={!isHost}
+                                            disabled={!isHost || disabled}
                                             onClick={e => {
                                                 e.stopPropagation();
                                                 e.preventDefault();
