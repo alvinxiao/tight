@@ -286,10 +286,10 @@ function Game() {
                             </Tooltip>
                         </Grid>
                     </Toolbar>
+                    {stepperToolbar}
                     <Collapse in={actionExpanded}>
                         <Box className={classes.phaseActionDetails}>
                             <Grid container direction="column">
-                                {stepperToolbar}
                                 <Stepper classes={{ root: classes.stepper }} activeStep={phase} alternativeLabel>
                                     {STEPS.map(label => (
                                         <Step
