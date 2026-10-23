@@ -7,6 +7,9 @@ import {
     Card,
     CardActions,
     CardContent,
+    Checkbox,
+    FormControlLabel,
+    TextField,
     Container,
     Dialog,
     DialogActions,
@@ -20,7 +23,7 @@ import { useSession } from '../SessionGate';
 import { SavedGameSummary } from 'common/savedGames';
 import JoinGameDialog from '../components/JoinGameDialog';
 import NewGameDialog from '../components/NewGameDialog';
-import { deleteSavedGame, exportSavedGame, fetchSavedGames, importSavedGame } from '../utils/savedGames';
+import { deleteSavedGame, exportSavedGame, fetchSavedGames, importSavedGame, organizeSavedGame } from '../utils/savedGames';
 
 type SavedGames = { kind: 'loading' } | { kind: 'error' } | { kind: 'ready'; games: SavedGameSummary[] };
 type Notice = { severity: 'success' | 'error'; message: string } | null;
@@ -33,6 +36,8 @@ function Home() {
     const [saved, setSaved] = useState<SavedGames>({ kind: 'loading' });
     const [notice, setNotice] = useState<Notice>(null);
     const [busy, setBusy] = useState(false);
+    const [showArchived, setShowArchived] = useState(false);
+    const [rename, setRename] = useState<{ id: string; name: string } | null>(null);
     const [deleteId, setDeleteId] = useState<string | null>(null);
 
     async function refresh(signal?: AbortSignal) {
@@ -68,6 +73,8 @@ function Home() {
             setDeleteId(null);
         }
     }
+
+    const visibleGames = saved.kind === 'ready' ? saved.games.filter(game => showArchived || !game.archived) : [];
 
     if (session.role === 'player' || session.role === 'spectator') return <Container sx={{ py: 4 }}>
         <Typography>You are paired with game {session.gameId} as {session.role === 'player' ? session.playerId : 'a spectator'}.</Typography>
@@ -122,6 +129,13 @@ function Home() {
                         }}
                     />
                 </Stack>
+                <FormControlLabel
+                    control={<Checkbox checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />}
+                    label="Show archived games"
+                />
+                {saved.kind === 'ready' && saved.games.length > 0 && visibleGames.length === 0 && (
+                    <Typography>No active saved games. Turn on Show archived games to restore one.</Typography>
+                )}
                 {notice && (
                     <Alert severity={notice.severity} sx={{ mb: 2 }}>
                         {notice.message}
@@ -146,12 +160,14 @@ function Home() {
                 )}
                 {saved.kind === 'ready' && (
                     <Stack spacing={2}>
-                        {saved.games.map(game => (
+                        {visibleGames.map(game => (
                             <Card key={game.id} component="article" aria-label={`Saved game ${game.id}`}>
                                 <CardContent>
-                                    <Typography component="h3" variant="h6">
-                                        {game.id}
+                                    <Typography component="h3" variant="h6" sx={{ overflowWrap: 'anywhere' }}>
+                                        {game.name || game.id}
                                     </Typography>
+                                    {game.name && <Typography>Game code {game.id}</Typography>}
+                                    {game.archived && <Typography color="text.secondary">Archived</Typography>}
                                     <Typography>
                                         {game.state === 'finished'
                                             ? 'Finished'
@@ -164,10 +180,10 @@ function Home() {
                                         {game.players.length ? game.players.join(', ') : 'No players yet'}
                                     </Typography>
                                     <Typography color="text.secondary">
-                                        Created {new Date(game.date).toLocaleString()}
+                                        Last played {new Date(game.lastPlayed).toLocaleString()}
                                     </Typography>
                                 </CardContent>
-                                <CardActions sx={{ flexWrap: 'wrap' }}>
+                                <CardActions sx={{ flexWrap: 'wrap', '& .MuiButton-root': { minHeight: 44 } }}>
                                     <Button
                                         component={Link}
                                         to={`/${game.id}`}
@@ -183,6 +199,18 @@ function Home() {
                                     >
                                         Export
                                     </Button>
+                                    <Button disabled={busy} aria-label={`Rename ${game.id}`}
+                                        onClick={() => { setNotice(null); setRename({ id: game.id, name: game.name || '' }); }}>
+                                        Rename
+                                    </Button>
+                                    <Button disabled={busy} aria-label={`${game.archived ? 'Restore' : 'Archive'} ${game.id}`}
+                                        onClick={() => void act(async () => {
+                                            await organizeSavedGame(game.id, { archived: !game.archived });
+                                            await refresh();
+                                            return game.archived ? `Restored game ${game.id}.` : `Archived game ${game.id}. Its data and join links are preserved.`;
+                                        })}>
+                                        {game.archived ? 'Restore' : 'Archive'}
+                                    </Button>
                                     <Button
                                         color="error"
                                         disabled={busy}
@@ -197,6 +225,31 @@ function Home() {
                     </Stack>
                 )}
             </Box>
+            <Dialog open={rename !== null} onClose={() => { if (!busy) setRename(null); }}
+                aria-labelledby="rename-game-title" fullWidth maxWidth="sm">
+                <DialogTitle id="rename-game-title">Rename saved game</DialogTitle>
+                <Box component="form" onSubmit={event => {
+                    event.preventDefault();
+                    if (rename && !busy) void act(async () => {
+                        await organizeSavedGame(rename.id, { name: rename.name.trim() || null });
+                        await refresh();
+                        setRename(null);
+                        return `Renamed game ${rename.id}.`;
+                    });
+                }}>
+                <DialogContent>
+                    {notice?.severity === 'error' && <Alert severity="error">{notice.message}</Alert>}
+                    <TextField autoFocus fullWidth margin="dense" label="Game name" value={rename?.name || ''}
+                        disabled={busy} inputProps={{ maxLength: 80 }}
+                        helperText="Stored on this host. Up to 80 characters; leave blank to use the game code."
+                        onChange={event => { if (rename) setRename({ ...rename, name: event.target.value }); }} />
+                </DialogContent>
+                <DialogActions>
+                    <Button disabled={busy} onClick={() => setRename(null)}>Cancel</Button>
+                    <Button disabled={busy} type="submit">Save name</Button>
+                </DialogActions>
+                </Box>
+            </Dialog>
             <Dialog
                 open={deleteId !== null}
                 onClose={() => {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SavedGameSummary } from 'common/savedGames.js';
+import { savedGameNameSchema, SavedGameSummary } from 'common/savedGames.js';
 import { savedGameSchema } from '../savedGameSchema.js';
 import { Response, Router } from 'express';
 
@@ -16,7 +16,7 @@ import {
     GameValidateResult,
 } from 'common/api.js';
 
-import { createGame, getGame, restartGame, importGame, listGames } from '../database/game.js';
+import { createGame, getGame, restartGame, importGame, listSavedGames, organizeSavedGame } from '../database/game.js';
 
 import { deleteGameAndNotify, markGameDirty } from '../dirty.js';
 import { PostRequest, GetRequest } from './types.js';
@@ -30,19 +30,27 @@ const exportSchema = z
 
 export default function initializeGameOperations(router: Router) {
     router.get('/game/list', (_req, res: Response<SavedGameSummary[]>) => {
-        const games = Object.values(listGames()).map(
-            game =>
-                ({
-                    id: game.id,
-                    date: game.date,
-                    round: game.status.round,
-                    numRounds: game.numRounds,
-                    players: Object.keys(game.players),
-                    state: game.status.ended ? 'finished' : game.status.started ? 'playing' : 'setup',
-                }) satisfies SavedGameSummary,
-        );
-        games.sort((a, b) => b.date - a.date || a.id.localeCompare(b.id));
-        res.json(games);
+        res.json(listSavedGames());
+    });
+    const renameSchema = gameQuerySchema.extend({ name: savedGameNameSchema }).strict();
+    const archiveSchema = gameQuerySchema.extend({ archived: z.boolean() }).strict();
+    router.post('/game/rename', (req, res) => {
+        const parsed = parseRequest(renameSchema, req.body, res);
+        if (!parsed.success) return;
+        if (!organizeSavedGame(parsed.data.gameId, { name: parsed.data.name })) {
+            res.status(404).json({ error: 'Game not found' });
+            return;
+        }
+        res.json({ saved: true });
+    });
+    router.post('/game/archive', (req, res) => {
+        const parsed = parseRequest(archiveSchema, req.body, res);
+        if (!parsed.success) return;
+        if (!organizeSavedGame(parsed.data.gameId, { archived: parsed.data.archived })) {
+            res.status(404).json({ error: 'Game not found' });
+            return;
+        }
+        res.json({ saved: true });
     });
     router.get('/game/export', (req, res) => {
         const parsed = parseRequest(gameQuerySchema, req.query, res);

@@ -10,7 +10,7 @@ For this cloud workspace, set `TIGHT_DATA_DIR=/workspace/.tight-data` before sta
 
 One backend holds an exclusive SQLite lock for its lifetime. Starting another backend with the same directory fails before it starts listening. Closing or force-killing the first process releases the lock; no PID file needs removal.
 
-Game creation, restart, import, and deletion write to SQLite before returning success. A WebSocket command commits its changed game before the next broadcast. If a write fails, the backend restores the previous game, pending broadcast flags, and socket player binding. It closes the sending connection with code 1011, and the interface offers reconnect. HTTP storage failures return 503. Reconnect to inspect the committed state before retrying; command acknowledgments and automatic retries remain tracked in issue #12.
+Game creation, restart, import, and deletion write to SQLite before returning success. A WebSocket command commits its changed game before the next broadcast. If a write fails, the backend restores the previous game, pending broadcast flags, and socket player binding. It closes the sending connection with code 1011, and the interface offers reconnect. HTTP storage failures return 503. Reconnect to inspect the committed state before retrying; See [command confirmation](command-protocol.md) for acknowledgments and safe retries.
 
 SQLite uses its rollback journal and `synchronous=FULL` for interrupted-write recovery. Games no longer expire after inactivity. Explicit deletion remains permanent in the current database.
 
@@ -18,7 +18,7 @@ SQLite uses its rollback journal and `synchronous=FULL` for interrupted-write re
 
 After loading a valid, nonempty database at startup, the backend writes a complete SQLite backup under `backups/`. It keeps the three newest startup backups. These are startup snapshots, not a backup after every move. Keep separate exports for longer-term protection.
 
-An unsupported schema version, malformed saved game, or invalid database stops startup. The backend does not replace the file with an empty database. Migration backups retain the original format so recovery can use a compatible application version. A version-3 database cannot be opened by an older preview; restore a pre-migration backup into a separate data folder if a downgrade is necessary.
+An unsupported schema version, malformed saved game, or invalid database stops startup. The backend does not replace the file with an empty database. Migration backups retain the original format so recovery can use a compatible application version. A version-4 database cannot be opened by an older preview; restore a pre-migration backup into a separate data folder if a downgrade is necessary.
 
 To restore a backup:
 
@@ -35,8 +35,20 @@ Never copy or replace a live database by hand. If SQLite left a rollback journal
 
 `POST /api/game/import` accepts the exported JSON with `Content-Type: application/json`, up to 1 MiB. It validates the complete snapshot before writing. An existing game code returns 409 and is never overwritten. Invalid or unsupported exports return 400. Successful imports retain the code, player names, factions, planets, scores, and game status.
 
-The normal request limit remains 64 KiB. The home screen lists saved games, opens their existing URLs, downloads exports, and imports selected JSON files. Deletion requires confirmation. Duplicate imports preserve the existing game and show an error. Player identity across browser sessions remains tracked in issue #18. These endpoints have the same unfinished authorization model as the rest of the API; permissions remain a release blocker in issue #4.
+The normal request limit remains 64 KiB. The home screen lists saved games, opens their existing URLs, downloads exports, and imports selected JSON files. Deletion requires confirmation. Duplicate imports preserve the existing game and show an error. Saved-game administration is host-only. Paired players and spectators cannot list, rename, archive, import, export, or delete the host’s saves.
 
 ## Verification
 
 `npm test` runs real backend processes to test committed moves across forced termination, exclusive ownership, restart and deletion durability, backup integrity and rotation, export/import round trips, invalid database preservation, and failed writes. Write failures use SQLite abort triggers in disposable databases, without product-only test switches. CI runs these checks on Windows and Linux, including the minimum Node version on Linux.
+
+## Saved-game library
+
+Hosts can rename games with up to 80 characters, clear the name to use the game code, and archive or restore games. Archived games are hidden from the default home list. **Show archived games** reveals them. Archiving preserves the complete game, paired devices, and join links; it does not pause or lock a live game.
+
+The list sorts by the last committed game change. Renaming, archiving, reading, and retrying an already committed command do not update this timestamp. A resumed game moves to the top after its next saved change. Imported games receive the import time.
+
+Names, archive status, and the last-played timestamp belong to this host’s library. SQLite stores them beside the snapshot, separately from game state and command revisions. Organization changes therefore cannot stale an outstanding phone command. A whole-database backup preserves library details. Portable JSON exports keep the existing game-only format and do not include the name or archive status.
+
+Database version 4 adds these fields. Versions 1, 2, and 3 are validated and backed up under `backups/migrations` before migration. Existing games begin unnamed and unarchived, with their creation time as the initial last-played value because older versions did not record it. Invalid persisted metadata stops startup while preserving the database.
+
+Keeping these fields in game snapshots would change live revisions for library-only actions and alter portable exports. A separate JSON sidecar would lose SQLite’s write and backup guarantees. Columns on the existing game row keep creation, updates, deletion, and backups consistent without an additional synchronization step.

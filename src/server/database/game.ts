@@ -196,6 +196,13 @@ export function deleteGame(id: string): boolean {
     return false;
 }
 
+export function listSavedGames() {
+    return storage().savedGames();
+}
+export function organizeSavedGame(id: string, change: { name: string | null } | { archived: boolean }): boolean {
+    return storage().organize(id, change);
+}
+
 export function listGames(): Readonly<GameMap> {
     return _games as Readonly<GameMap>;
 }
