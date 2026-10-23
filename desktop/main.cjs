@@ -2,6 +2,7 @@ const { app, BrowserWindow, dialog, session, utilityProcess, ipcMain, Menu, powe
 const path = require('node:path');
 const fs = require('node:fs');
 const { createSharingPreferences } = require('./sharing-preference.cjs');
+const { readBuildIdentity } = require('./build-identity.cjs');
 const { createDiagnostics, errorCode } = require('./diagnostics.cjs');
 
 app.setName('TIGHT');
@@ -312,7 +313,8 @@ async function exportDiagnostics() {
         status = await requestBackend(null, false, 'diagnostics');
     } catch {}
     const report = diagnostics.exportReport(
-        { app: app.getVersion(), electron: process.versions.electron, node: process.versions.node },
+        { app: app.getVersion(), electron: process.versions.electron, node: process.versions.node,
+            build: readBuildIdentity(path.join(__dirname, 'build-identity.json')) },
         { backend: backendState, ...status },
     );
     const result = await dialog.showSaveDialog({

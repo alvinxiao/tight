@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { parseBuildIdentity } = require('./build-identity.cjs');
 
 const EVENTS = new Set([
     'app.started',
@@ -107,6 +108,7 @@ function createDiagnostics(directory) {
             exportedAt: new Date().toISOString(),
             versions: {
                 app: versions.app,
+                build: parseBuildIdentity(versions.build),
                 backend: versions.app,
                 electron: versions.electron,
                 node: versions.node,

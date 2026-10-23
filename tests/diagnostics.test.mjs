@@ -107,3 +107,16 @@ test('oversized persistent logs are rejected without losing current-launch diagn
     assert.equal(report.persistentLogs, false);
     assert.deepEqual(report.events.map(value => value.code), ['ENOSPC']);
 });
+
+test('diagnostics identify a packaged build without exposing arbitrary build metadata', async t => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'tight-build-diagnostics-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const diagnostics = createDiagnostics(directory);
+    const build = { revision: 'a'.repeat(40), modified: false, path: 'SECRET' };
+    assert.deepEqual(diagnostics.exportReport({ ...versions, build }, state).versions.build, {
+        revision: 'a'.repeat(40), modified: false,
+    });
+    const invalid = diagnostics.exportReport({ ...versions, build: { revision: 'SECRET', modified: false } }, state);
+    assert.deepEqual(invalid.versions.build, { revision: null, modified: null });
+    assert.equal(JSON.stringify(invalid).includes('SECRET'), false);
+});
