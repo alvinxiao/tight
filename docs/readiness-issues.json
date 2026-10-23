@@ -133,5 +133,10 @@
     "number": 42,
     "url": "https://github.com/alvinxiao/tight/issues/42",
     "title": "[D09][P1] Restore usable QR invitations after quitting and restarting"
+  },
+  "D10": {
+    "number": 43,
+    "url": "https://github.com/alvinxiao/tight/issues/43",
+    "title": "[D10][P1] Show every player slot in one host setup screen"
   }
 }

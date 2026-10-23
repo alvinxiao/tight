@@ -1,4 +1,4 @@
-import { Button, CircularProgress, Grid, Toolbar, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Grid, Toolbar, Typography } from '@mui/material';
 import React from 'react';
 
 import { GameClientData } from 'common/Game';
@@ -56,33 +56,46 @@ function PlayerSetup() {
 
     return (
         <>
-            <GameInfoToolbar game={game} />
-            <Toolbar>
-                <Grid container flexDirection="row" alignItems="center" wrap="nowrap">
-                    <Grid container justifyContent="flex-start" alignItems="center" spacing={1}>
-                        {!factionsHavePlayers ? (
-                            <Typography color="red">Must assign at least one player</Typography>
-                        ) : null}
-                    </Grid>
-                    <Grid container justifyContent="flex-end" alignItems="center" spacing={1}>
-                        {pending ? (
+            <Box sx={{ display: { xs: 'block', md: 'flex' }, alignItems: 'center' }}>
+                <GameInfoToolbar
+                    game={game}
+                    sx={{
+                        flex: 1,
+                        minWidth: 0,
+                        minHeight: { md: 40 },
+                        '& .MuiIconButton-root': { minWidth: { md: 44 }, minHeight: { md: 44 }, p: { md: 0.5 } },
+                        '& > .MuiButton-root': { whiteSpace: 'nowrap', flexShrink: 0 },
+                    }}
+                />
+                <Toolbar
+                    sx={{ minHeight: { md: 40 }, flexShrink: 0, '& .MuiGrid-container': { width: { md: 'auto' } } }}
+                >
+                    <Grid container flexDirection="row" alignItems="center" wrap="nowrap">
+                        <Grid container justifyContent="flex-start" alignItems="center" spacing={1}>
+                            {!factionsHavePlayers ? (
+                                <Typography color="red">Must assign at least one player</Typography>
+                            ) : null}
+                        </Grid>
+                        <Grid container justifyContent="flex-end" alignItems="center" spacing={1}>
+                            {pending ? (
+                                <Grid item>
+                                    <CircularProgress aria-label="Saving changes" size={24} />
+                                </Grid>
+                            ) : null}
                             <Grid item>
-                                <CircularProgress aria-label="Saving changes" size={24} />
+                                <Button
+                                    color="primary"
+                                    variant="contained"
+                                    disabled={isSpectator || pending || !canStart(game)}
+                                    onClick={onStartClick}
+                                >
+                                    Start
+                                </Button>
                             </Grid>
-                        ) : null}
-                        <Grid item>
-                            <Button
-                                color="primary"
-                                variant="contained"
-                                disabled={isSpectator || pending || !canStart(game)}
-                                onClick={onStartClick}
-                            >
-                                Start
-                            </Button>
                         </Grid>
                     </Grid>
-                </Grid>
-            </Toolbar>
+                </Toolbar>
+            </Box>
             <FactionsSetup />
         </>
     );
