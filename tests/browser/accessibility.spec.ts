@@ -11,6 +11,7 @@ test('setup controls support names and keyboard input; core screens meet automat
     };
     const tabTo = async (target: Locator) => {
         await expect(target).toBeVisible();
+        await expect(target).toBeEnabled();
         for (let attempt = 0; attempt < 50; attempt++) {
             if (await target.evaluate(element => element === document.activeElement)) return;
             await page.keyboard.press('Tab');

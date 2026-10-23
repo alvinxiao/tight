@@ -1,13 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
-import ts from 'typescript';
+import { rules } from './helpers/game-rules.mjs';
 
-const source = await readFile(new URL('../src/common/Game.ts', import.meta.url), 'utf8');
-const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
-const { calculateVictoryPoints } = await import(
-    `data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`
-);
+const { calculateVictoryPoints } = rules;
 
 test('objective scores follow stable IDs after deletion/reordering, not array positions', () => {
     const game = {

@@ -325,3 +325,77 @@ test('saved-game list returns summaries and reflects deletion', async t => {
     await request('/game/delete', { id });
     assert.equal((await request('/game/list')).some(game => game.id === id), false);
 });
+
+test('base and expansion strategy cards cannot be owned by two factions', async t => {
+    const { id, ws } = await gameTest(t, { numPlayers: 2 });
+    const first = 'The Arborec', second = 'The Emirates of Hacan';
+    await command(ws, T.GAME_UPDATE_FACTION, { gameId: id, order: 0, name: first });
+    await command(ws, T.GAME_UPDATE_FACTION, { gameId: id, order: 1, name: second });
+    for (const [held, requested] of [[2, 2.1], [2.1, 2], [4, 4.1], [4.1, 4]]) {
+        await command(ws, T.TAKE_STRATEGY_CARD, { gameId: id, factionName: first, strategyCard: held });
+        await command(ws, T.TAKE_STRATEGY_CARD, { gameId: id, factionName: second, strategyCard: requested });
+        const game = await snapshot(id, ws);
+        assert.equal(game.factions[0].strategyCard, held);
+        assert.equal(game.factions[1].strategyCard, 0);
+        assert.equal(game.factions.filter(faction => Math.floor(faction.strategyCard) === Math.floor(held)).length, 1);
+        await command(ws, T.RETURN_STRATEGY_CARD, { gameId: id, factionName: first });
+    }
+});
+
+test('speaker rotation, Naalu initiative, passes and the next round retain the correct game state', async t => {
+    const { id, ws } = await gameTest(t, { numPlayers: 3, numRounds: 2 });
+    const names = ['The Naalu Collective', 'The Arborec', 'The Emirates of Hacan'];
+    for (const [order, name] of names.entries()) {
+        await command(ws, T.GAME_UPDATE_FACTION, { gameId: id, order, name });
+    }
+    await command(ws, T.GAME_STATUS_SET, { gameId: id, pickOrder: names });
+    await command(ws, T.GAME_SET_SPEAKER, { gameId: id, speaker: names[2] });
+    let game = await snapshot(id, ws);
+    assert.deepEqual(game.status.pickOrder, [names[2], names[0], names[1]]);
+    assert.equal(game.status.speaker, names[2]);
+    for (const [index, strategyCard] of [8, 1, 5].entries()) {
+        await command(ws, T.TAKE_STRATEGY_CARD, { gameId: id, factionName: names[index], strategyCard });
+    }
+    game = await snapshot(id, ws);
+    assert.equal(game.status.turn, 8);
+    await command(ws, T.GAME_STATUS_SET, { gameId: id, phase: 1 });
+    for (const [index, expectedTurn] of [1, 5, 9].entries()) {
+        await command(ws, T.PASS_TURN, { gameId: id, factionName: names[index], passed: true });
+        assert.equal((await snapshot(id, ws)).status.turn, expectedTurn);
+    }
+    await command(ws, T.TAKE_PLANET, { gameId: id, factionName: names[0], planetId: 'Mecatol Rex' });
+    await command(ws, T.SET_VICTORY_POINTS, { gameId: id, factionName: names[0], victoryPoints: 2 });
+    await command(ws, T.GAME_STATUS_SET, { gameId: id, phase: 2 });
+    await command(ws, T.GAME_NEXT_ROUND, { gameId: id });
+    game = await snapshot(id, ws);
+    assert.equal(game.status.round, 2);
+    assert.equal(game.status.phase, 0);
+    assert.equal(game.status.turn, 0);
+    assert.equal(game.status.speaker, names[2]);
+    assert.deepEqual(game.status.pickOrder, [names[2], names[0], names[1]]);
+    assert.ok(game.factions.every(faction => faction.strategyCard === 0 && !faction.passed && !faction.stragetyCardFlipped));
+    assert.equal(game.factions[0].hasNaaluZeroToken, true);
+    assert.equal(game.factions[0].victoryPoints, 2);
+    assert.deepEqual(game.factions[0].planets, ['Mecatol Rex']);
+    assert.equal(game.planets['Mecatol Rex'].owner, names[0]);
+});
+
+test('restarting a game preserves players and configuration while resetting its played state', async t => {
+    const objective = { id: 3, description: 'Configured objective', vp: 2 };
+    const { id, ws } = await gameTest(t, { numPlayers: 2, numRounds: 3, numVictoryPoints: 12, publicObjectives: [objective] });
+    await command(ws, T.GAME_ADD_PLAYER, { gameId: id, playerId: 'Returning player' });
+    await command(ws, T.GAME_UPDATE_FACTION, { gameId: id, order: 0, name: 'The Arborec', playerIds: ['Returning player'] });
+    await command(ws, T.GAME_NEXT_ROUND, { gameId: id });
+    await command(ws, T.SET_VICTORY_POINTS, { gameId: id, factionName: 'The Arborec', victoryPoints: 4 });
+    await request('/game/restart', { id });
+    const game = await snapshot(id, ws);
+    assert.deepEqual(game.players, ['Returning player']);
+    assert.equal(game.numPlayers, 2);
+    assert.equal(game.numRounds, 3);
+    assert.equal(game.numVictoryPoints, 12);
+    assert.deepEqual(game.publicObjectives, [objective]);
+    assert.equal(game.status.round, 1);
+    assert.equal(game.status.started, false);
+    assert.equal(game.status.phase, 0);
+    assert.ok(game.factions.every(faction => faction.name === 'None' && faction.victoryPoints === 0));
+});
