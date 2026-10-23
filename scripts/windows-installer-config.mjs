@@ -32,6 +32,7 @@ export function windowsInstallerConfig(root, manifest, mode, environment = proce
             signExecutable: mode === 'release',
         },
         nsis: {
+            include: path.join(root, 'desktop', 'installer.nsh'),
             oneClick: false,
             perMachine: false,
             allowElevation: false,

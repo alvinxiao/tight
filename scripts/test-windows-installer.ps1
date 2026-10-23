@@ -38,6 +38,11 @@ try {
     Install-Tight
     & node (Join-Path $root 'tests\installer\installed-app.mjs') create $exe $directory
     if ($LASTEXITCODE -ne 0) { throw 'The installed application could not create a saved game.' }
+    & node (Join-Path $root 'tests\installer\installed-app.mjs') blocked-update $exe $directory $setup
+    if ($LASTEXITCODE -ne 0) { throw 'Setup or uninstall interrupted a running host.' }
+    Install-Tight
+    & node (Join-Path $root 'tests\installer\installed-app.mjs') resume $exe $directory
+    if ($LASTEXITCODE -ne 0) { throw 'An in-place installation did not preserve saved games, library details and device permissions.' }
     Uninstall-Tight
     Install-Tight
     & node (Join-Path $root 'tests\installer\installed-app.mjs') resume $exe $directory
