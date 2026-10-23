@@ -63,7 +63,7 @@ export default function AgendaPhase() {
     } = game;
 
     const isSpectator = !canEditTable;
-    const canEndEarly = round < numRounds && !isSpectator;
+    const canEndEarly = round < numRounds && isHost;
 
     const factionsAtVp = factions.filter(f => calculateVictoryPoints(game, f.name) >= game.numVictoryPoints);
     const winners = factionsAtVp.length ? factionsAtVp.map(f => f.name).join(', ') : '';

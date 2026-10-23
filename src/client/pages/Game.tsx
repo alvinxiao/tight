@@ -198,8 +198,8 @@ function Game() {
         phaseStatus = <Typography>{message}</Typography>;
     } else if (phase === Phase.AGENDA) {
         if (round === game.numRounds) {
-            phaseStatus = (
-                <Button disabled={!isHost} color="primary" variant="contained" onClick={onEndGame}>
+            phaseStatus = !isHost ? <Typography>Ask the host to end this game.</Typography> : (
+                <Button disabled={pending} color="primary" variant="contained" onClick={onEndGame}>
                     {pending ? <CircularProgress aria-label="Saving game" size="24" /> : 'End Game'}
                 </Button>
             );
