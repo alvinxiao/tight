@@ -51,7 +51,7 @@ export default function PairDeviceDialog({
     }, [open, name, role, tableEditing, baseOrigin]);
     useEffect(() => {
         setTableEditing(false);
-    }, [open, role]);
+    }, [open, name, role]);
     const close = () => {
         cancel();
         onClose();

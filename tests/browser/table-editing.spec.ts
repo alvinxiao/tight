@@ -16,11 +16,12 @@ test('host explicitly grants public table editing while private and host control
         portable.game.factions.forEach((faction, index) => Object.assign(faction, {
             name: index ? second : first, color: index ? '#2962ff' : '#d50000',
             playerIds: ['Host'], strategyCard: Card.NONE,
-            secretObjectives: [{ cleared: false, objective: { id: -1, description: 'Host private objective', vp: 1 } }],
+            secretObjectives: Array.from({ length: 3 }, (_, secretIndex) => ({ cleared: false, objective: { id: -secretIndex - 1, description: 'Host private objective', vp: 1 } })),
         }));
         Object.assign(portable.game.status, { started: true, pickOrder: [first, second], speaker: first });
         expect((await request.post('/api/game/delete', { data: { id } })).ok()).toBe(true);
-        expect((await request.post('/api/game/import', { data: portable })).ok()).toBe(true);
+        const imported = await request.post('/api/game/import', { data: portable });
+        expect(imported.ok(), await imported.text()).toBe(true);
         await page.addInitScript(gameId => {
             sessionStorage.setItem('gameId', gameId);
             sessionStorage.setItem('playerId', 'Host');
@@ -32,8 +33,19 @@ test('host explicitly grants public table editing while private and host control
         await expect(grant).not.toBeChecked();
         await expect(page.getByText(/To remove this permission or recover a lost device/)).toBeVisible();
         await grant.check();
+        await page.getByRole('textbox', { name: 'Player name', exact: true }).fill('Replacement helper');
+        await expect(grant).not.toBeChecked();
+        await grant.check();
+        await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
+        await expect(page.getByRole('textbox', { name: 'One-use invitation link', exact: true })).toBeVisible();
+        await grant.uncheck();
+        await expect(page.getByRole('textbox', { name: 'One-use invitation link', exact: true })).toHaveCount(0);
+        await grant.check();
         await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
         const invitation = await page.getByRole('textbox', { name: 'One-use invitation link', exact: true }).inputValue();
+        await page.getByRole('button', { name: 'Close', exact: true }).click();
+        await page.getByRole('button', { name: 'Pair a device', exact: true }).click();
+        await expect(grant).not.toBeChecked();
         await page.getByRole('button', { name: 'Close', exact: true }).click();
         const phone = await guest.newPage();
         await phone.goto(invitation);
