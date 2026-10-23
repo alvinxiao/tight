@@ -1,3 +1,4 @@
+import { collectBuildIdentity } from './build-identity.mjs';
 import { windowsInstallerConfig } from './windows-installer-config.mjs';
 import { writeRuntimeInventory } from './runtime-inventory.mjs';
 import { packager } from '@electron/packager';
@@ -18,6 +19,7 @@ try {
     await writeRuntimeInventory(root, stage);
     await cp(path.join(root, 'LICENSE'), path.join(stage, 'TIGHT-LICENSE.txt'));
     await cp(path.join(root, 'desktop'), path.join(stage, 'desktop'), { recursive: true });
+    await writeFile(path.join(stage, 'desktop', 'build-identity.json'), JSON.stringify(collectBuildIdentity(root)));
     await cp(path.join(root, 'dist'), path.join(stage, 'dist'), { recursive: true });
     await cp(path.join(root, 'build', 'desktop-backend.js'), path.join(stage, 'build', 'desktop-backend.js'));
     await writeFile(

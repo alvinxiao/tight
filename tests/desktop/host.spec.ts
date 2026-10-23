@@ -2,7 +2,7 @@ import { test, expect, _electron as electron, ElectronApplication } from '@playw
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import { DatabaseSync } from 'node:sqlite';
 import { createRequire } from 'node:module';
@@ -367,6 +367,9 @@ test('native diagnostics export excludes private data and sleep restores the sel
                 )
                 .toBe('lan');
         }
+        const expectedBuild = process.env.TIGHT_DESKTOP_EXECUTABLE
+            ? { revision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(), modified: false }
+            : { revision: null, modified: null };
         const exported = path.join(directory, 'support.json');
         await app.evaluate(({ dialog }, filename) => {
             dialog.showSaveDialog = async () => ({ canceled: false, filePath: filename });
@@ -382,6 +385,7 @@ test('native diagnostics export excludes private data and sleep restores the sel
             const report: unknown = JSON.parse(await readFile(exported, 'utf8'));
             expect(report).toMatchObject({
                 format: 1,
+                versions: { build: expectedBuild },
                 host: { backend: 'ready', storage: 'open', connections: 1, connectedPlayers: 0 },
             });
         }).toPass();
