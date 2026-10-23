@@ -57,7 +57,7 @@ try {
                 const child = spawn(installer, ['/S'], { stdio: 'ignore', windowsHide: true });
                 try {
                     const [code] = await once(child, 'exit', { signal: AbortSignal.timeout(45000) });
-                    assert.equal(code, 2, 'Setup and uninstall must refuse a running host.');
+                    assert.equal(code, 2, `${path.basename(installer)} must refuse a running host.`);
                 } finally { if (child.exitCode === null) child.kill(); }
                 assert.equal(await page.evaluate(() => performance.timeOrigin), started, 'Installer must not restart the host.');
                 assert.equal(guestSocket.readyState, WebSocket.OPEN, 'A paired guest must remain connected.');

@@ -8,3 +8,9 @@
     Quit
   ${EndIf}
 !macroend
+
+!macro preInit
+  !ifndef BUILD_UNINSTALLER
+    !insertmacro customCheckAppRunning
+  !endif
+!macroend
