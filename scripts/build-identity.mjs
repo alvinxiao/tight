@@ -1,5 +1,4 @@
 import { execFileSync } from 'node:child_process';
-import { realpathSync } from 'node:fs';
 import { parseBuildIdentity } from '../desktop/build-identity.cjs';
 
 export function collectBuildIdentity(root) {
@@ -7,7 +6,7 @@ export function collectBuildIdentity(root) {
         cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
     try {
-        if (realpathSync(git(['rev-parse', '--show-toplevel'])) !== realpathSync(root))
+        if (git(['rev-parse', '--show-prefix']) !== '')
             return parseBuildIdentity(null);
         return parseBuildIdentity({
             revision: git(['rev-parse', '--verify', 'HEAD']),
