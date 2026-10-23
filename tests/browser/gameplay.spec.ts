@@ -39,6 +39,7 @@ test('host and phone synchronize turns, scoring, round reset and final results',
             await expect(page.getByRole('button', { name: 'UNFLIP', exact: true })).toBeVisible();
             await expect(phone.getByRole('button', { name: 'DONE', exact: true })).toBeDisabled();
             await page.getByRole('button', { name: 'DONE', exact: true }).click();
+            await expect(phone.getByText('Turn: END', { exact: true })).toBeVisible();
             await expect(page.getByRole('button', { name: 'Next Turn', exact: true })).toBeEnabled();
             await page.getByRole('button', { name: 'Next Turn', exact: true }).click();
             await expect(phone.getByText('Turn:', { exact: true }).locator('..')).toContainText('The Arborec (Phone)');
