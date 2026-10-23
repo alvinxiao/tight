@@ -257,7 +257,10 @@ export default function useWebSocket(options: WebSocketOptions) {
                 failed();
                 return;
             }
-            if (document.visibilityState === 'visible') retryTimer.current = setTimeout(connect, RETRY_INTERVAL);
+            if (document.visibilityState === 'visible') {
+                const delay = RETRY_INTERVAL * 2 ** Math.max(0, attempts.current - 1);
+                retryTimer.current = setTimeout(connect, delay);
+            }
         };
         // The close handler owns retrying failures, including rejected handshakes.
         ws.onerror = () => {};
