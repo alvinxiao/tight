@@ -307,3 +307,16 @@ test('nested command save failures notify once and a broken diagnostic observer 
     assert.deepEqual(store.version(f.game.id), version);
     assert.deepEqual(store.load()[f.game.id], f.game);
 });
+
+test('SQLite automatic rollback retains the original write failure and its diagnostic notification', async t => {
+    const f = await fixture(t);
+    f.sql(db => db.exec("CREATE TRIGGER fail_receipt BEFORE INSERT ON command_receipts BEGIN SELECT RAISE(ROLLBACK, 'PRIVATE automatic rollback'); END"));
+    const failures = [];
+    const store = f.open(error => failures.push(error));
+    const version = store.version(f.game.id);
+    assert.throws(() => store.commitCommand(f.game.id, identity(version), () => scored(f.game, 3)), /Could not save game/);
+    assert.equal(failures.length, 1);
+    assert.match(failures[0].message, /PRIVATE automatic rollback/);
+    assert.deepEqual(store.version(f.game.id), version);
+    assert.deepEqual(store.load()[f.game.id], f.game);
+});

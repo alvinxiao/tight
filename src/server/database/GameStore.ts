@@ -93,6 +93,18 @@ export class GameStore {
         }
         return new StorageError(cause);
     }
+    private failTransaction(cause: unknown, transaction: boolean): never {
+        const failure = cause instanceof CommandRejected ? cause : this.writeError(cause);
+        if (transaction) {
+            try {
+                this.database.exec('ROLLBACK');
+            } catch (rollbackError) {
+                // SQLite may already have rolled back. Preserve the original write failure.
+                if (failure instanceof CommandRejected) throw this.writeError(rollbackError);
+            }
+        }
+        throw failure;
+    }
     close(): void {
         this.database.close();
     }
@@ -239,8 +251,7 @@ export class GameStore {
                 .run(hash, session.gameId, session.role, session.role === 'player' ? session.playerId : null);
             this.database.exec('COMMIT');
         } catch (cause) {
-            if (transaction) this.database.exec('ROLLBACK');
-            throw this.writeError(cause);
+            this.failTransaction(cause, transaction);
         }
     }
     save(game: Game): Game {
@@ -313,9 +324,7 @@ export class GameStore {
             this.database.exec('COMMIT');
             return result;
         } catch (cause) {
-            if (transaction) this.database.exec('ROLLBACK');
-            if (cause instanceof CommandRejected) throw cause;
-            throw this.writeError(cause);
+            this.failTransaction(cause, transaction);
         }
     }
     delete(id: string): void {
