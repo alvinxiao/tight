@@ -62,9 +62,12 @@ test('host explicitly grants public table editing while private and host control
         await expect(phone.getByRole('button', { name: 'ACTION phase details', exact: true })).toBeVisible();
         await phone.getByRole('button', { name: 'Menu', exact: true }).click();
         await phone.getByText('My Planets', { exact: true }).click();
-        await phone.getByRole('combobox', { name: 'My Factions', exact: true }).click();
+        await phone.getByRole('combobox', { name: /^My Factions/u }).click();
         await expect(phone.getByRole('option', { name: first, exact: true })).toBeVisible();
         await phone.getByRole('option', { name: second, exact: true }).click();
+        await expect(phone.getByRole('button', { name: 'Add/Remove Planets', exact: true })).toBeEnabled();
+        await phone.reload();
+        await expect(phone.getByRole('combobox', { name: /^My Factions/u })).toBeVisible();
         await expect(phone.getByRole('button', { name: 'Add/Remove Planets', exact: true })).toBeEnabled();
         await phone.goto(`/${id}/players`);
         await expect(phone.getByRole('table', { name: 'Faction assignments', exact: true })).toBeVisible();
