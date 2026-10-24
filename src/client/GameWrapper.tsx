@@ -26,7 +26,7 @@ export default function GameWrapper(props: GameWrapperProps): ReactElement {
     const [loadAttempt, setLoadAttempt] = useState(0);
 
     const {
-        state: { initialized },
+        state: { initialized, snapshotSequence },
         dispatch,
         sendData,
     } = useAppContext();
@@ -103,7 +103,7 @@ export default function GameWrapper(props: GameWrapperProps): ReactElement {
         return () => {
             controller.abort();
         };
-    }, [initialized, gameIdToLoad, gameId, playerId, loadAttempt]);
+    }, [initialized, snapshotSequence, gameIdToLoad, gameId, playerId, loadAttempt]);
 
     useEffect(() => {
         // Ensure local state is synced to the game loaded status
