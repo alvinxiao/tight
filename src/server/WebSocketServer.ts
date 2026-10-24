@@ -43,6 +43,7 @@ function snapshot(ws: WebSocket, session: Session): void {
         ws,
         type: MessageType.BROADCAST_INITIALIZE,
         data: {
+            loadedGameId: ws.gameId || null,
             game: game ? visibleGame(game, session) : null,
             playerId: ws.playerId,
             gameVersion: game ? getGameVersion(game.id) : null,

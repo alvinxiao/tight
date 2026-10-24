@@ -6,6 +6,8 @@ The client groups synchronous commands from one interaction into one transaction
 
 `GAME_LOAD` is a read-only subscription request. It selects an authorized game and an already registered identity and returns a full snapshot. It never registers a player, assigns a faction, or advances the game revision. Registration uses an acknowledged mutation; claiming a player invitation registers that approved identity on the host.
 
+`BROADCAST_INITIALIZE` includes `loadedGameId`, the authorized subscription code or null for an unbound host connection. This identifies the response even when `game` is null because the game is missing. The browser and bundled backend must use the same protocol version. A load shares the ten-second recovery deadline, and snapshots from a previous subscription cannot complete that load.
+
 ## Save and acknowledgment
 
 `GameStore.commitCommand` checks for a receipt before invoking the mutation callback. Repeating the same principal, command UUID, and payload returns `duplicate`, including when the completed action would now fail domain validation. Reusing that UUID with another payload returns `conflict`. A command based on another incarnation or an older revision returns `stale` without mutation.

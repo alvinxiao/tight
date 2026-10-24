@@ -26,6 +26,7 @@ const snapshotSchema = z
         playerId: z.string().nullable().optional(),
     })
     .passthrough();
+const initialSnapshotSchema = snapshotSchema.extend({ loadedGameId: gameIdSchema.nullable() });
 interface PendingCommand {
     id: string;
     gameId: string;
@@ -58,7 +59,11 @@ export default function useWebSocket(options: WebSocketOptions) {
     const active = useRef(false);
     const retryTimer = useRef<ReturnType<typeof setTimeout>>();
     const openTimer = useRef<ReturnType<typeof setTimeout>>();
-    const snapshotWait = useRef<{ socket: WebSocket; timer: ReturnType<typeof setTimeout> } | null>(null);
+    const snapshotWait = useRef<{
+        socket: WebSocket;
+        gameId: string | null;
+        timer: ReturnType<typeof setTimeout>;
+    } | null>(null);
     const recoverCurrent = useRef<(() => void) | null>(null);
     const manualRecovery = useRef(false);
     const clearTimers = useCallback(() => {
@@ -67,8 +72,8 @@ export default function useWebSocket(options: WebSocketOptions) {
         if (snapshotWait.current) clearTimeout(snapshotWait.current.timer);
         snapshotWait.current = null;
     }, []);
-    const waitForSnapshot = useCallback((socket: WebSocket) => {
-        if (snapshotWait.current?.socket === socket) return;
+    const waitForSnapshot = useCallback((socket: WebSocket, gameId: string | null) => {
+        if (snapshotWait.current?.socket === socket && snapshotWait.current.gameId === gameId) return;
         if (snapshotWait.current) clearTimeout(snapshotWait.current.timer);
         optionsRef.current.dispatch({
             type: ActionType.setConnecting,
@@ -76,6 +81,7 @@ export default function useWebSocket(options: WebSocketOptions) {
         });
         snapshotWait.current = {
             socket,
+            gameId,
             timer: setTimeout(() => {
                 if (snapshotWait.current?.socket === socket) recoverCurrent.current?.();
             }, SNAPSHOT_TIMEOUT),
@@ -183,7 +189,7 @@ export default function useWebSocket(options: WebSocketOptions) {
         ws.onopen = () => {
             if (!isCurrent()) return;
             clearTimers();
-            waitForSnapshot(ws);
+            waitForSnapshot(ws, gameId || null);
         };
         ws.onmessage = event => {
             if (!isCurrent()) return;
@@ -214,7 +220,18 @@ export default function useWebSocket(options: WebSocketOptions) {
                             message: `Game ${reply.gameId}: ${reply.message || 'Your change was not applied. Review the current game and try again.'}`,
                         });
                 } else if (type === MessageType.BROADCAST_INITIALIZE || type === MessageType.BROADCAST_CHANGE) {
-                    const snapshot = snapshotSchema.parse(data);
+                    const snapshot =
+                        type === MessageType.BROADCAST_INITIALIZE
+                            ? initialSnapshotSchema.parse(data)
+                            : snapshotSchema.parse(data);
+                    // Ignore the previous subscription while a newer game is loading.
+                    if (
+                        snapshotWait.current?.socket === ws &&
+                        snapshotWait.current.gameId !== null &&
+                        ('loadedGameId' in snapshot ? snapshot.loadedGameId : snapshot.game?.id) !==
+                            snapshotWait.current.gameId
+                    )
+                        return;
                     if (type === MessageType.BROADCAST_INITIALIZE && snapshotWait.current?.socket === ws) {
                         clearTimeout(snapshotWait.current.timer);
                         snapshotWait.current = null;
@@ -244,6 +261,7 @@ export default function useWebSocket(options: WebSocketOptions) {
                             !snapshot.game.created &&
                             !snapshot.game.deleted
                         ) {
+                            waitForSnapshot(ws, snapshot.game.id);
                             ws.send(
                                 JSON.stringify({
                                     type: MessageType.GAME_LOAD,
@@ -311,7 +329,7 @@ export default function useWebSocket(options: WebSocketOptions) {
                 const { state } = optionsRef.current;
                 if (state.game) {
                     if (snapshotWait.current?.socket === ws) return;
-                    waitForSnapshot(ws);
+                    waitForSnapshot(ws, state.game.id);
                     try {
                         ws.send(
                             JSON.stringify({
@@ -362,6 +380,8 @@ export default function useWebSocket(options: WebSocketOptions) {
                 return false;
             }
             if (type === MessageType.GAME_LOAD) {
+                const target = z.object({ gameId: gameIdSchema }).passthrough().parse(data);
+                waitForSnapshot(ws, target.gameId);
                 try {
                     ws.send(JSON.stringify({ type, data }));
                     return true;
@@ -431,7 +451,7 @@ export default function useWebSocket(options: WebSocketOptions) {
             });
             return true;
         },
-        [failed, flush, publish],
+        [failed, flush, publish, waitForSnapshot],
     );
     return { sendData };
 }
