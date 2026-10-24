@@ -169,7 +169,8 @@ export default function useWebSocket(options: WebSocketOptions) {
         const { state, dispatch, url } = optionsRef.current;
         dispatch({ type: ActionType.setConnecting, payload: { connecting: true, connectError: false } });
         const endpoint = new URL(url);
-        const gameId = state.game?.id || sessionStorage.getItem('gameId');
+        // Navigation records its target before a load request can fail; state may still hold the previous game.
+        const gameId = sessionStorage.getItem('gameId') || state.game?.id;
         const playerId = state.playerId || sessionStorage.getItem('playerId');
         if (gameId) endpoint.searchParams.set('gameId', gameId);
         if (playerId) endpoint.searchParams.set('playerId', playerId);
@@ -365,7 +366,7 @@ export default function useWebSocket(options: WebSocketOptions) {
                     ws.send(JSON.stringify({ type, data }));
                     return true;
                 } catch {
-                    failed();
+                    recoverCurrent.current?.();
                     return false;
                 }
             }
