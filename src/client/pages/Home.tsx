@@ -31,6 +31,7 @@ type Notice = { severity: 'success' | 'error'; message: string } | null;
 function Home() {
     const session = useSession();
     const importInput = useRef<HTMLInputElement>(null);
+    const renameInput = useRef<HTMLInputElement>(null);
     const libraryHeading = useRef<HTMLHeadingElement>(null);
     const actionFocus = useRef<HTMLElement | null>(null);
     const [openCreateDialog, setOpenCreateDialog] = useState(false);
@@ -52,6 +53,14 @@ function Home() {
             (opener.isConnected ? opener : libraryHeading.current)?.focus();
         }
     }, [busy, rename, deleteId, dialogPresent]);
+
+    useEffect(() => {
+        if (!rename || busy || notice?.severity !== 'error') return;
+        const input = renameInput.current;
+        const focused = document.activeElement;
+        // A disabled submit button leaves focus on the modal container or body.
+        if (input && focused !== input && focused?.contains(input)) input.focus();
+    }, [rename, busy, notice]);
 
     async function refresh(signal?: AbortSignal) {
         setNotice(null);
@@ -258,7 +267,7 @@ function Home() {
                 }}>
                 <DialogContent>
                     {notice?.severity === 'error' && <Alert severity="error">{notice.message}</Alert>}
-                    <TextField autoFocus fullWidth margin="dense" label="Game name" value={rename?.name || ''}
+                    <TextField autoFocus inputRef={renameInput} fullWidth margin="dense" label="Game name" value={rename?.name || ''}
                         InputProps={{ readOnly: busy }} inputProps={{ maxLength: 80 }}
                         helperText="Stored on this host. Up to 80 characters; leave blank to use the game code."
                         onChange={event => { if (rename) setRename({ ...rename, name: event.target.value }); }} />
