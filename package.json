@@ -20,6 +20,7 @@
         "audit:runtime": "npm audit --omit=dev --audit-level=low",
         "test": "npm run build:server && node --test --test-concurrency=1 tests/*.test.mjs",
         "test:browser": "npm run build && npm run typecheck:browser && playwright test",
+        "typecheck": "tsc --noEmit --project tsconfig.web.json && tsc --noEmit --project tsconfig.server.json",
         "typecheck:browser": "tsc --project tsconfig.tests.json",
         "build:desktop-backend": "cross-env TARGET=desktop NODE_ENV=production webpack --config webpack.config.ts",
         "build:desktop": "npm run build && npm run build:desktop-backend",
