@@ -173,7 +173,8 @@ test('connection slots release on close and command or handshake floods do not r
 for (const flood of ['api', 'pages']) {
     test(`${flood} request bursts cannot consume the other HTTP allowance`, async t => {
         const { backend, api } = await host(t);
-        const page = () => fetch(backend.origin + '/', { method: 'HEAD', signal: AbortSignal.timeout(3000) });
+        // Exercise the page bucket without requiring assets, which are built after backend CI.
+        const page = () => fetch(backend.origin + '/', { method: 'OPTIONS', signal: AbortSignal.timeout(3000) });
         const request = flood === 'api' ? () => api('session') : page;
         let response;
         for (let attempt = 0; attempt < 200; attempt++) {
