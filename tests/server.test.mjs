@@ -6,6 +6,7 @@ import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import WebSocket from 'ws';
 import ts from 'typescript';
 import { claimHost, withCookie } from './helpers/host-access.mjs';
@@ -123,12 +124,13 @@ test('WebSocket diagnostics retain message types without player names or private
     while (!logs.includes('Closing web socket connection')) {
         await once(server.stdout, 'data', { signal: AbortSignal.timeout(3000) });
     }
+    const traffic = stripVTControlCharacters(logs);
     for (const privateValue of [player, description, 'secretObjectives', cookie.split('=')[1]]) {
-        assert.equal(logs.includes(privateValue), false, `Traffic logs exposed ${privateValue}`);
+        assert.equal(traffic.includes(privateValue), false, `Traffic logs exposed ${privateValue}`);
     }
-    assert.doesNotMatch(logs, new RegExp(`\\b${id}\\b`));
-    assert.match(logs, /Receiving from [a-f0-9-]{36} SET_SECRET_OBJECTIVE/);
-    assert.match(logs, /Sending to [a-f0-9-]{36} BROADCAST_INITIALIZE/);
+    assert.doesNotMatch(traffic, new RegExp(`\\b${id}\\b`));
+    assert.match(traffic, /Receiving from [a-f0-9-]{36} SET_SECRET_OBJECTIVE/);
+    assert.match(traffic, /Sending to [a-f0-9-]{36} BROADCAST_INITIALIZE/);
 });
 
 test('round progression respects configured limits of 1, 2, 10, and 20', async t => {
