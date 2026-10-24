@@ -8,13 +8,16 @@ export default function useGameInfo() {
 
     const session = useSession();
     const isHost = session.role === 'host';
-    const canEditFaction = (name: string | null) =>
+    const canEditTable = isHost || (session.role === 'player' && session.gameId === game?.id && session.tableEditing === true);
+    const canEditSecretFaction = (name: string | null) =>
         pendingCommands === 0 &&
         Boolean(name) &&
         (isHost ||
             (session.role === 'player' &&
                 session.gameId === game?.id &&
                 game.factions.some(faction => faction.name === name && faction.playerIds.includes(session.playerId))));
+    const canEditPublicFaction = (name: string | null) =>
+        pendingCommands === 0 && Boolean(name) && (canEditTable || canEditSecretFaction(name));
     const gameId = game?.id;
-    return { gameId, game, playerId, strategyCards, session, isHost, canEditFaction };
+    return { gameId, game, playerId, strategyCards, session, isHost, canEditTable, canEditPublicFaction, canEditSecretFaction };
 }

@@ -174,7 +174,7 @@ test('version-two migration preserves games and grants with a separate pre-migra
     const f = await fixture(t);
     f.sql(db => {
         db.exec(
-            'DROP TABLE command_receipts; ALTER TABLE games DROP COLUMN name; ALTER TABLE games DROP COLUMN archived; ALTER TABLE games DROP COLUMN last_played; ALTER TABLE games DROP COLUMN incarnation; ALTER TABLE games DROP COLUMN revision; PRAGMA user_version=2',
+            'ALTER TABLE access_sessions DROP COLUMN table_editing; DROP TABLE command_receipts; ALTER TABLE games DROP COLUMN name; ALTER TABLE games DROP COLUMN archived; ALTER TABLE games DROP COLUMN last_played; ALTER TABLE games DROP COLUMN incarnation; ALTER TABLE games DROP COLUMN revision; PRAGMA user_version=2',
         );
         db.prepare('INSERT INTO access_sessions(token_hash, game_id, role, player_id) VALUES (?, ?, ?, ?)').run(
             principal,
@@ -204,7 +204,7 @@ test('an invalid version-two grant prevents migration without changing the origi
     const f = await fixture(t);
     f.sql(db => {
         db.exec(
-            'DROP TABLE command_receipts; ALTER TABLE games DROP COLUMN name; ALTER TABLE games DROP COLUMN archived; ALTER TABLE games DROP COLUMN last_played; ALTER TABLE games DROP COLUMN incarnation; ALTER TABLE games DROP COLUMN revision; PRAGMA user_version=2; PRAGMA ignore_check_constraints=ON',
+            'ALTER TABLE access_sessions DROP COLUMN table_editing; DROP TABLE command_receipts; ALTER TABLE games DROP COLUMN name; ALTER TABLE games DROP COLUMN archived; ALTER TABLE games DROP COLUMN last_played; ALTER TABLE games DROP COLUMN incarnation; ALTER TABLE games DROP COLUMN revision; PRAGMA user_version=2; PRAGMA ignore_check_constraints=ON',
         );
         db.prepare('INSERT INTO access_sessions(token_hash, game_id, role, player_id) VALUES (?, ?, ?, ?)').run(
             principal,

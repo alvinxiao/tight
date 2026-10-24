@@ -130,7 +130,7 @@ function Game() {
         sendData,
         state: { pendingCommands },
     } = useAppContext();
-    const { gameId, game, playerId, isHost } = useGameInfo();
+    const { gameId, game, playerId, isHost, canEditTable } = useGameInfo();
     const navigate = useNavigate();
 
     const pending = pendingCommands > 0;
@@ -155,7 +155,7 @@ function Game() {
         return <PlayerSetup />;
     }
 
-    const isSpectator = !isHost;
+    const isSpectator = !canEditTable;
 
     const { round, phase } = status;
     const canBack = round > 1 || (round === 1 && phase > Phase.STRATEGY);
@@ -198,8 +198,8 @@ function Game() {
         phaseStatus = <Typography>{message}</Typography>;
     } else if (phase === Phase.AGENDA) {
         if (round === game.numRounds) {
-            phaseStatus = (
-                <Button disabled={isSpectator} color="primary" variant="contained" onClick={onEndGame}>
+            phaseStatus = !isHost ? <Typography>Ask the host to end this game.</Typography> : (
+                <Button disabled={pending} color="primary" variant="contained" onClick={onEndGame}>
                     {pending ? <CircularProgress aria-label="Saving game" size="24" /> : 'End Game'}
                 </Button>
             );

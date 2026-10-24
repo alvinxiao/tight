@@ -66,10 +66,10 @@ async function fixture(t) {
         const initial = await packet(ws);
         return { ws, initial: initial.data };
     }
-    async function pair(gameId, role = 'player', playerId = 'Alice') {
+    async function pair(gameId, role = 'player', playerId = 'Alice', tableEditing = false) {
         const invitation = await admin(
             'session/invite',
-            role === 'player' ? { role, gameId, playerId } : { role, gameId },
+            role === 'player' ? { role, gameId, playerId, ...(tableEditing ? { tableEditing: true } : {}) } : { role, gameId },
         );
         assert.equal(invitation.status, 200);
         const { token } = await invitation.json();
@@ -403,4 +403,90 @@ test('only the host can revoke paired devices and unused invitations without del
     assert.equal((await f.admin('game/export?gameId=' + id)).status, 200);
     assert.equal((await f.admin('session/revoke', { gameId: id })).status, 200, 'repeating revocation is harmless');
     await f.pair(id);
+});
+
+test('host-approved table editors change public factions and table controls without private or host powers', async t => {
+    const f = await fixture(t);
+    const id = await (await f.admin('game/create', { numPlayers: 2 })).json();
+    const other = await (await f.admin('game/create', {})).json();
+    const editor = await f.pair(id, 'player', 'Alice', true);
+    const ordinary = await f.pair(id, 'player', 'Bob');
+    assert.equal((await (await f.request('session', editor)).json()).tableEditing, true);
+    assert.equal((await (await f.request('session', ordinary)).json()).tableEditing, undefined);
+    assert.equal((await f.request('session/invite', ordinary, { role: 'player', gameId: id, playerId: 'Bob', tableEditing: true })).status, 403);
+    assert.equal((await f.admin('session/invite', { role: 'spectator', gameId: id, tableEditing: true })).status, 400);
+    assert.equal((await f.request('session/claim', '', { token: editor.split('=')[1], tableEditing: true })).status, 400);
+    const { ws: host } = await f.connect(f.hostCookie(), id);
+    await command(host, T.GAME_UPDATE_FACTION, { gameId: id, order: 0, name: 'The Arborec', color: '#d50000', playerIds: ['Alice'] });
+    await command(host, T.GAME_UPDATE_FACTION, { gameId: id, order: 1, name: 'The Emirates of Hacan', color: '#2962ff', playerIds: ['Bob'] });
+    await command(host, T.SET_SECRET_OBJECTIVE, { gameId: id, factionName: 'The Emirates of Hacan', secretObjectives: secret('Bob private') });
+    await command(host, T.GAME_STATUS_SET, { gameId: id, pickOrder: ['The Arborec', 'The Emirates of Hacan'], speaker: 'The Arborec' });
+    await command(host, T.START_GAME, { gameId: id });
+    let { ws: player, initial } = await f.connect(editor, id);
+    assert.equal(initial.game.factions[1].secretObjectives[0].objective.description, '');
+    await command(player, T.SET_VICTORY_POINTS, { gameId: id, factionName: 'The Emirates of Hacan', victoryPoints: 3 });
+    await command(player, T.GAME_SET_SPEAKER, { gameId: id, speaker: 'The Emirates of Hacan' });
+    await command(player, T.TAKE_PLANET, { gameId: id, factionName: 'The Emirates of Hacan', planetId: ['Mecatol Rex'] });
+    await command(player, T.GAME_SET_CUSTODIANS_REMOVED, { gameId: id, custodiansRemoved: true });
+    for (const [type, data] of [
+        [T.GAME_UPDATE_FACTION, { order: 1, playerIds: ['Alice'] }],
+        [T.GAME_UPDATE_FACTION, { order: 1, name: 'The Yssaril Tribes' }],
+        [T.GAME_REORDER_FACTION, { index: 0, newIndex: 1 }],
+        [T.SET_SECRET_OBJECTIVE, { factionName: 'The Emirates of Hacan', secretObjectives: secret('forged') }],
+        [T.START_GAME, {}], [T.STOP_GAME, {}], [T.END_GAME, {}],
+    ]) {
+        const { ws } = await f.connect(editor, id);
+        await denied(ws, type, { gameId: id, ...data });
+    }
+    const { initial: afterAttempt } = await f.connect(editor, id);
+    assert.deepEqual(afterAttempt.game.factions[1].playerIds, ['Bob']);
+    assert.equal(afterAttempt.game.factions[1].secretObjectives[0].objective.description, '');
+    const { ws: crossGame } = await f.connect(editor, id);
+    await denied(crossGame, T.SET_VICTORY_POINTS, { gameId: other, factionName: 'The Arborec', victoryPoints: 9 });
+    for (const [route, body] of [
+        ['game/create', {}], ['game/delete', { id }], ['game/restart', { id }],
+        ['game/import', {}], ['game/export?gameId=' + id],
+        ['session/invite', { gameId: id, role: 'spectator' }], ['session/revoke', { gameId: id }],
+    ]) assert.equal((await f.request(route, editor, body)).status, 403, route);
+    await command(player, T.GAME_STATUS_SET, { gameId: id, phase: 1 });
+    await command(player, T.GAME_STATUS_SET, { gameId: id, phase: 2 });
+    await command(player, T.GAME_STATUS_SET, { gameId: id, phase: 3 });
+    await command(player, T.GAME_NEXT_ROUND, { gameId: id });
+    await f.restart();
+    assert.equal((await (await f.request('session', editor)).json()).tableEditing, true);
+    ({ ws: player } = await f.connect(editor, id));
+    await command(player, T.SET_VICTORY_POINTS, { gameId: id, factionName: 'The Emirates of Hacan', victoryPoints: 4 });
+    const closed = once(player, 'close', { signal: AbortSignal.timeout(3000) });
+    const replacement = await f.pair(id, 'player', 'Alice');
+    assert.equal((await closed)[0], 1008);
+    assert.equal((await (await f.request('session', editor)).json()).role, 'unpaired');
+    const { ws: limited } = await f.connect(replacement, id);
+    await denied(limited, T.SET_VICTORY_POINTS, { gameId: id, factionName: 'The Emirates of Hacan', victoryPoints: 9 });
+    const restored = await f.pair(id, 'player', 'Alice', true);
+    await f.admin('session/revoke', { gameId: id });
+    assert.equal((await (await f.request('session', restored)).json()).role, 'unpaired');
+});
+
+test('version-four migration preserves ordinary player and spectator grants in a separate recoverable backup', async t => {
+    const f = await fixture(t);
+    const id = await (await f.admin('game/create', {})).json();
+    const player = await f.pair(id);
+    const spectator = await f.pair(id, 'spectator');
+    let previousRows;
+    await f.restart(directory => {
+        const old = new DatabaseSync(path.join(directory, 'games.sqlite'));
+        old.exec('ALTER TABLE access_sessions DROP COLUMN table_editing; PRAGMA user_version=4');
+        previousRows = old.prepare('SELECT * FROM access_sessions ORDER BY token_hash').all();
+        old.close();
+    });
+    assert.deepEqual(await (await f.request('session', player)).json(), { role: 'player', gameId: id, playerId: 'Alice' });
+    assert.deepEqual(await (await f.request('session', spectator)).json(), { role: 'spectator', gameId: id });
+    const backups = await readdir(path.join(f.directory, 'backups', 'migrations'));
+    assert.equal(backups.length, 1);
+    const backup = new DatabaseSync(path.join(f.directory, 'backups', 'migrations', backups[0]), { readOnly: true });
+    try {
+        assert.equal(backup.prepare('PRAGMA user_version').get().user_version, 4);
+        assert.deepEqual(backup.prepare('SELECT * FROM access_sessions ORDER BY token_hash').all(), previousRows);
+        assert.equal(JSON.parse(backup.prepare('SELECT snapshot FROM games WHERE id=?').get(id).snapshot).id, id);
+    } finally { backup.close(); }
 });

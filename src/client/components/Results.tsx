@@ -37,7 +37,7 @@ const useStyles = makeStyles(theme => ({
 
 function Results() {
     const classes = useStyles();
-    const { game, playerId, canEditFaction } = useGameInfo();
+    const { game, playerId, canEditPublicFaction } = useGameInfo();
     if (!game) {
         return null;
     }
@@ -89,7 +89,7 @@ function Results() {
                         <VictoryPoints
                             factionName={faction.name}
                             allowShowSecret
-                            disabled={!canEditFaction(faction.name) || game.status.ended}
+                            disabled={!canEditPublicFaction(faction.name) || game.status.ended}
                         />
                     </CardContent>
                 </Card>

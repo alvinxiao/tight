@@ -12,9 +12,9 @@ export default function RefreshAllbutton() {
         sendData,
         state: { pendingCommands },
     } = useAppContext();
-    const { game, gameId, playerId, isHost } = useGameInfo();
+    const { game, gameId, playerId, canEditTable } = useGameInfo();
 
-    if (!game || !isHost) {
+    if (!game || !canEditTable) {
         return null;
     }
 

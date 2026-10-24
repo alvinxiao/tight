@@ -118,6 +118,31 @@ export function authorizeCommand(session: Session, command: ClientCommand, game:
     if (session.role !== 'player') return 'Spectators cannot change the game';
     if (command.type === MessageType.GAME_ADD_PLAYER)
         return command.data.playerId === session.playerId ? null : 'Cannot select another player';
+    if (session.tableEditing) {
+        switch (command.type) {
+            case MessageType.GAME_SET_PUBLIC_OBJECTIVES:
+            case MessageType.GAME_STATUS_SET:
+            case MessageType.GAME_NEXT_ROUND:
+            case MessageType.GAME_SET_SPEAKER:
+            case MessageType.GAME_SET_CUSTODIANS_REMOVED:
+            case MessageType.GAME_SET_AGENDA_VOTED:
+            case MessageType.UPDATE_PLANET:
+            case MessageType.TAKE_NAALU_ZERO_TOKEN:
+            case MessageType.TAKE_STRATEGY_CARD:
+            case MessageType.RETURN_STRATEGY_CARD:
+            case MessageType.FLIP_STRATEGY_CARD:
+            case MessageType.PASS_TURN:
+            case MessageType.SET_PUBLIC_OBJECTIVES:
+            case MessageType.SET_VICTORY_POINTS:
+            case MessageType.TAKE_PLANET:
+            case MessageType.LOST_PLANET:
+            case MessageType.EXHAUST_PLANET:
+            case MessageType.REFRESH_PLANET:
+            case MessageType.EXHAUST_PLANET_ABILITY:
+            case MessageType.REFRESH_PLANET_ABILITY:
+                return null;
+        }
+    }
     switch (command.type) {
         case MessageType.TAKE_NAALU_ZERO_TOKEN:
         case MessageType.TAKE_STRATEGY_CARD:
