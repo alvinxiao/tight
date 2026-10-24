@@ -101,6 +101,8 @@ The backend serves watched browser assets and API from one origin. Reload after 
 
 | Command | Coverage |
 | --- | --- |
+| `npm run typecheck` | All browser-app and Node-backend TypeScript source, checked with their respective build configurations. |
+| `npm run typecheck:browser` | Browser and Electron test code. |
 | `npm test` | Backend, domain, validation, permissions, concurrent commands, persistence, migrations, and recovery with disposable servers and databases. |
 | `npx playwright install chromium`, then `npm run test:browser` | Real Chromium host and independent phone-sized browser journeys, including pairing, gameplay, saved games, permission boundaries, and request recovery. |
 | `npm run test:desktop` | Electron startup, isolation, lifecycle, sharing, persistence, and recovery. Linux needs a virtual display. |

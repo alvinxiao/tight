@@ -33,6 +33,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Verify frozen installation
         run: git diff --exit-code -- package.json package-lock.json
+      - run: npm run typecheck
       - run: npm run audit:runtime
       - name: Audit development and runtime dependencies
         run: npm audit --audit-level=low
