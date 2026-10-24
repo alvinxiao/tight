@@ -1,4 +1,4 @@
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useEffect, useRef, useState } from 'react';
 
 import { Edit } from '@mui/icons-material';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
@@ -131,6 +131,16 @@ function PlanetsTable(props: PlanetsTableProps) {
     const [nameFilter, setNameFilter] = useState('');
     const [sortBy, setSortBy] = useState<{ key: ColumnType; asc: boolean }>({ key: 'name', asc: true });
     const [editPlanet, setEditPlanet] = useState<PlanetData | null>(null);
+    const editOpener = useRef<HTMLButtonElement | null>(null);
+
+    useEffect(() => {
+        if (editPlanet || disabled || !canEditTable) return;
+        // Saving temporarily disables the opener, so the dialog cannot restore it on close.
+        if (document.activeElement === document.body && editOpener.current?.isConnected) {
+            editOpener.current.focus();
+        }
+        editOpener.current = null;
+    }, [editPlanet, disabled, canEditTable]);
 
     const { planets = {} } = game || {};
     let names = Object.keys(planets);
@@ -353,10 +363,12 @@ function PlanetsTable(props: PlanetsTableProps) {
                                 <TableCell align="center">
                                     <Tooltip title="Edit">
                                         <IconButton
+                                            aria-label={`Edit ${planet.name}`}
                                             disabled={!canEditTable || disabled}
                                             onClick={e => {
                                                 e.stopPropagation();
                                                 e.preventDefault();
+                                                editOpener.current = e.currentTarget;
                                                 setEditPlanet(planet);
                                             }}
                                         >
