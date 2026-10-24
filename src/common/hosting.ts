@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const address = z.string().ip({ version: 'v4' });
+const address = z.ipv4();
 const base = z.object({
     port: z.number().int().min(1).max(65535),
     restoreError: z.enum(['unavailable', 'failed']).optional(),

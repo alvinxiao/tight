@@ -86,7 +86,7 @@ export const planetQuerySchema = z
     })
     .strict();
 
-function command<Type extends MessageType, Data extends z.AnyZodObject>(type: Type, data: Data) {
+function command<Type extends MessageType, Data extends z.ZodObject>(type: Type, data: Data) {
     return z.object({ type: z.literal(type), data }).strict();
 }
 

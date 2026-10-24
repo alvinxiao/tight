@@ -111,7 +111,6 @@ These automated checks do not establish physical phone or clean-machine release 
 
 ## Remaining release limitations
 
-- The latest CI runtime audit reports high-severity advisories in the pinned dependency graph: [body-parser GHSA-27r3-jxmh-p828](https://github.com/advisories/GHSA-27r3-jxmh-p828) and [Zod GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5). Dependency remediation and a passing full CI run are required before release. The audit proposes a major-version Zod upgrade, which needs compatibility verification.
 - The preview is unsigned. Publisher signing, final dependency/license review, and rights to distribute Twilight Imperium names, rules text, and artwork remain release work. The source MIT license does not resolve those distribution rights.
 - Windows 11 x64 is the qualification target. Clean standard-user Windows machines, SmartScreen, firewall allow/deny, Android Chrome, iOS Safari, multiple real phones, and extended play still need recorded qualification. ARM64 is not supported by this build. Linux is a test environment, not a supported release target.
 - There is no automatic updater or automatic application rollback. Export and back up before manual updates. Signed cross-version upgrades, failed-update recovery, offline qualification, host sleep/reboot, and phone background/resume still require release testing.

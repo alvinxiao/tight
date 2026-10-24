@@ -4,6 +4,12 @@ Run `npm ci --legacy-peer-deps`, `npm run audit:runtime`, and `npm audit` before
 
 The October 22, 2026 update removed unused `superagent`, `cors`, and `ip`, replaced the address lookup with Node's network-interface API, removed unused Babel CLI, and replaced nodemon with Node's built-in watch mode. Express, ws, Babel, lodash, React Router, webpack, and their transitive dependencies were updated. The development toolchain now requires Node 22.15 or later. CI covers that minimum and Node 24.19.
 
+## Validation and request-parser security
+
+The dependency graph uses body-parser 1.20.9 and Zod 4.6.7 to address GHSA-27r3-jxmh-p828 and GHSA-mrhx-c7xc-m3w5. The Zod 4 migration updates schema types, safe-parse result types, and IPv4 validation. TypeScript 5.9.3 supports its declarations.
+
+Run `node --test tests/dependency-validation.test.mjs` to verify that oversized constrained arrays are rejected before their elements are read. The sparse-array regression reproduces the old traversal behavior without allocating a large payload or exhausting memory. Backend and browser suites verify the application contracts across the major-version upgrade.
+
 ## Development dependency audit
 
 The development-only webpack-dev-server proxy was removed after its dependency chain retained [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm). Browser development now uses webpack watch mode, and the backend serves the generated assets from the same origin. Developers reload after browser rebuilds instead of using hot module replacement. The proxy, middleware, glob parser and their affected dependency entries are no longer needed.
