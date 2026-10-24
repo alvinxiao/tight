@@ -14,14 +14,20 @@ The session module owns credential parsing, invitation consumption, and the perm
 
 ## Permission matrix
 
-| Action | Host | Paired player | Paired spectator | Unpaired browser |
-| --- | --- | --- | --- | --- |
-| Catalog reference data | Read | Read | Read | Read |
-| Game state | Any game | Own game | Own game | Denied |
-| Create, import, export, delete, restart | Allowed | Denied | Denied | Denied |
-| Setup, assignments, phase and round changes | Allowed | Denied | Denied | Denied |
-| Faction gameplay actions | Any faction | Assigned factions in own game | Denied | Denied |
-| Pair or replace a device | Allowed | Denied | Denied | Denied |
+| Action | Host | Ordinary player | Table editor | Spectator | Unpaired |
+| --- | --- | --- | --- | --- | --- |
+| Catalog reference data | Read | Read | Read | Read | Read |
+| Game state | Any game | Paired game | Paired game | Paired game | Denied |
+| Saved-game administration | Allowed | Denied | Denied | Denied | Denied |
+| Setup, faction assignments, game start/end/restart | Allowed | Denied | Denied | Denied | Denied |
+| Public faction gameplay | Any faction | Assigned factions | Any faction in paired game | Denied | Denied |
+| Private objective editing | Any faction | Assigned factions | Assigned factions | Denied | Denied |
+| Public objectives, turn, phase, round, speaker, agenda controls | Allowed | Denied | Allowed in paired game | Denied | Denied |
+| Pair, replace, or revoke devices | Allowed | Denied | Denied | Denied | Denied |
+
+A table editor is a paired player whose host explicitly checked **Allow table-wide editing** when creating the invitation. The grant persists in database schema version 5 and applies only to the paired game. It does not expose another faction's unscored private objectives or grant desktop/network administration.
+
+To remove the grant, create a replacement invitation for the same player name with the option unchecked and have the intended device claim it. Claiming replaces the previous device grant and disconnects its sockets. **Disconnect paired devices** immediately revokes all device grants and outstanding invitations for the game.
 
 ## Alternatives
 

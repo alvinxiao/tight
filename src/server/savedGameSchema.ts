@@ -32,7 +32,7 @@ const faction = z
     })
     .strict();
 
-export const savedGameSchema: z.ZodType<Game, z.ZodTypeDef, unknown> = z
+export const savedGameSchema: z.ZodType<Game> = z
     .object({
         id: gameIdSchema,
         date: z.number().int().nonnegative(),
