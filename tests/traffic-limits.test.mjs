@@ -169,3 +169,23 @@ test('connection slots release on close and command or handshake floods do not r
     assert.ok(Number(rejection.retry) > 0);
     assert.equal(clients[1].readyState, WebSocket.OPEN);
 });
+
+for (const flood of ['api', 'pages']) {
+    test(`${flood} request bursts cannot consume the other HTTP allowance`, async t => {
+        const { backend, api } = await host(t);
+        const page = () => fetch(backend.origin + '/', { method: 'HEAD', signal: AbortSignal.timeout(3000) });
+        const request = flood === 'api' ? () => api('session') : page;
+        let response;
+        for (let attempt = 0; attempt < 200; attempt++) {
+            response = await request();
+            if (response.status === 429) break;
+            assert.equal(response.status, 200);
+            await response.body?.cancel();
+        }
+        assert.equal(response.status, 429, 'both request classes remain bounded');
+        assert.ok(Number(response.headers.get('retry-after')) > 0);
+        const other = await (flood === 'api' ? page() : api('session'));
+        assert.equal(other.status, 200, 'page assets and host APIs have independent allowances');
+        await other.body?.cancel();
+    });
+}

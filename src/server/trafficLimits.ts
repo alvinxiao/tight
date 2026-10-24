@@ -40,10 +40,13 @@ export function peerAddress(request: IncomingMessage): string {
 }
 
 export function requestLimiter(): RequestHandler {
-    const requests = new RateLimit(120, 10, 256);
+    const apiRequests = new RateLimit(120, 10, 256);
+    const pageRequests = new RateLimit(120, 10, 256);
     const claims = new RateLimit(30, 0.5, 256);
     return (req, res, next) => {
         const peer = peerAddress(req);
+        // Loading pages and chunks must not spend the allowance for game/session operations.
+        const requests = /^\/api(?:\/|$)/i.test(req.path) ? apiRequests : pageRequests;
         const wait =
             requests.consume(peer) ||
             (req.method === 'POST' && /^\/api\/session\/(claim|host)\/?$/i.test(req.path) ? claims.consume(peer) : 0);

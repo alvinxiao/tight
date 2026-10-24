@@ -10,6 +10,8 @@ test('setup controls support names and keyboard input; core screens meet automat
         await button.press('Enter');
     };
     const tabTo = async (target: Locator) => {
+        // A closing select still owns focus until its transition unmounts the menu.
+        await expect(page.getByRole('listbox', { includeHidden: true })).toHaveCount(0);
         await expect(target).toBeVisible();
         await expect(target).toBeEnabled();
         for (let attempt = 0; attempt < 50; attempt++) {
