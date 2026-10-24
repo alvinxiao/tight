@@ -259,7 +259,7 @@ function Home() {
                 <DialogContent>
                     {notice?.severity === 'error' && <Alert severity="error">{notice.message}</Alert>}
                     <TextField autoFocus fullWidth margin="dense" label="Game name" value={rename?.name || ''}
-                        disabled={busy} inputProps={{ maxLength: 80 }}
+                        InputProps={{ readOnly: busy }} inputProps={{ maxLength: 80 }}
                         helperText="Stored on this host. Up to 80 characters; leave blank to use the game code."
                         onChange={event => { if (rename) setRename({ ...rename, name: event.target.value }); }} />
                 </DialogContent>
