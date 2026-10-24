@@ -71,12 +71,14 @@ export default function initializeGameOperations(router: Router) {
             return;
         }
         importGame(game);
+        markGameDirty(game.id, { created: true });
         res.json(game.id);
     });
     router.post('/game/create', (req: PostRequest<GameCreateParams>, res: Response<GameCreateResult>): void => {
         const parsed = parseRequest(gameCreateSchema, req.body, res);
         if (!parsed.success) return;
         const game = createGame(parsed.data);
+        markGameDirty(game.id, { created: true });
         res.status(200).json(game.id);
     });
 

@@ -64,6 +64,12 @@ export function markGameDirty(
 
     const prevDirtyParts = dirty.games[gameId];
 
+    // Full snapshots supersede older queued changes, including a reused code's deletion.
+    if (dirtyParts.created) {
+        dirty.games[gameId] = { created: true };
+        return;
+    }
+
     // Game is deleted, don't process any other dirty flags
     if (prevDirtyParts?.deleted || dirtyParts.deleted) {
         dirty.games[gameId] = { deleted: true };

@@ -37,6 +37,8 @@ Policy and storage closes, codes 1008 and 1011, remain blocked across visibility
 
 Receipts retain the most recent 2,000 per game and 10,000 overall. A pruned command that changed state has an old revision and cannot apply twice. If a pruned no-op is repeated without an intervening state change, it remains a no-op. Revisions never reset while a game exists, including game restart; a newly created or imported game receives a new incarnation. Metadata and receipts stay outside portable game exports.
 
+If a game is explicitly deleted and a replacement with the same code is created or imported before the next broadcast, the replacement's full snapshot supersedes the queued deletion. The old tombstone cannot be sent with the new game's version and delete a fresh subscription. Deletion without a replacement still notifies subscribers normally. Old guest grants remain revoked; reusing the code does not restore them.
+
 ## Verification
 
 Run `npm test` for real-client concurrency, duplicate, conflict, lost-response replay, rollback, restart, receipt-write failure, and reused-game-code tests. Run `npm run test:browser` for the host and phone journey and acknowledgment fault injection. The desktop suite decodes both rendered QR codes and checks their centers against the dialog's content stack. Physical Windows and phone qualification remains a separate release gate.
