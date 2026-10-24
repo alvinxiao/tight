@@ -11,6 +11,7 @@ const RETRY_LIMIT = 5;
 const RETRY_INTERVAL = 3000;
 const OPEN_TIMEOUT = 10000;
 const ACK_TIMEOUT = 10000;
+const SNAPSHOT_TIMEOUT = 10000;
 const COMMAND_ATTEMPTS = 3;
 const MAX_PENDING = 32;
 const gameIdSchema = z.string().regex(GAME_CODE_PATTERN);
@@ -57,9 +58,28 @@ export default function useWebSocket(options: WebSocketOptions) {
     const active = useRef(false);
     const retryTimer = useRef<ReturnType<typeof setTimeout>>();
     const openTimer = useRef<ReturnType<typeof setTimeout>>();
+    const snapshotWait = useRef<{ socket: WebSocket; timer: ReturnType<typeof setTimeout> } | null>(null);
+    const recoverCurrent = useRef<(() => void) | null>(null);
+    const manualRecovery = useRef(false);
     const clearTimers = useCallback(() => {
         clearTimeout(retryTimer.current);
         clearTimeout(openTimer.current);
+        if (snapshotWait.current) clearTimeout(snapshotWait.current.timer);
+        snapshotWait.current = null;
+    }, []);
+    const waitForSnapshot = useCallback((socket: WebSocket) => {
+        if (snapshotWait.current?.socket === socket) return;
+        if (snapshotWait.current) clearTimeout(snapshotWait.current.timer);
+        optionsRef.current.dispatch({
+            type: ActionType.setConnecting,
+            payload: { connecting: true, connectError: false },
+        });
+        snapshotWait.current = {
+            socket,
+            timer: setTimeout(() => {
+                if (snapshotWait.current?.socket === socket) recoverCurrent.current?.();
+            }, SNAPSHOT_TIMEOUT),
+        };
     }, []);
     const failed = useCallback(() => {
         optionsRef.current.dispatch({
@@ -138,7 +158,7 @@ export default function useWebSocket(options: WebSocketOptions) {
     }, [deliver]);
 
     const connect = useCallback(() => {
-        if (!active.current || document.visibilityState !== 'visible') return;
+        if (!active.current || document.visibilityState !== 'visible' || manualRecovery.current) return;
         const current = wsRef.current;
         if (current && (current.readyState === WebSocket.OPEN || current.readyState === WebSocket.CONNECTING)) return;
         clearTimers();
@@ -163,12 +183,7 @@ export default function useWebSocket(options: WebSocketOptions) {
         ws.onopen = () => {
             if (!isCurrent()) return;
             clearTimers();
-            attempts.current = 0;
-            optionsRef.current.dispatch({
-                type: ActionType.setConnecting,
-                payload: { connecting: false, connectError: false },
-            });
-            for (const entry of pending.current.values()) if (entry.attempts < COMMAND_ATTEMPTS) deliver(entry);
+            waitForSnapshot(ws);
         };
         ws.onmessage = event => {
             if (!isCurrent()) return;
@@ -200,6 +215,17 @@ export default function useWebSocket(options: WebSocketOptions) {
                         });
                 } else if (type === MessageType.BROADCAST_INITIALIZE || type === MessageType.BROADCAST_CHANGE) {
                     const snapshot = snapshotSchema.parse(data);
+                    if (type === MessageType.BROADCAST_INITIALIZE && snapshotWait.current?.socket === ws) {
+                        clearTimeout(snapshotWait.current.timer);
+                        snapshotWait.current = null;
+                        attempts.current = 0;
+                        optionsRef.current.dispatch({
+                            type: ActionType.setConnecting,
+                            payload: { connecting: false, connectError: false },
+                        });
+                        for (const entry of pending.current.values())
+                            if (entry.uncertain && entry.attempts < COMMAND_ATTEMPTS) deliver(entry);
+                    }
                     const previous = optionsRef.current.state;
                     if (
                         snapshot.game &&
@@ -248,12 +274,14 @@ export default function useWebSocket(options: WebSocketOptions) {
                 ws.close(1008, 'Unsupported host reply');
             }
         };
-        ws.onclose = event => {
+        const disconnected = (code: number) => {
             if (!isCurrent()) return;
             clearTimers();
             wsRef.current = null;
+            recoverCurrent.current = null;
             unconfirmed('The connection closed before your last change was confirmed. Reconnect to check it.');
-            if (event.code === 1008 || event.code === 1011 || attempts.current >= RETRY_LIMIT) {
+            if (code === 1008 || code === 1011) manualRecovery.current = true;
+            if (manualRecovery.current || attempts.current >= RETRY_LIMIT) {
                 failed();
                 return;
             }
@@ -262,9 +290,16 @@ export default function useWebSocket(options: WebSocketOptions) {
                 retryTimer.current = setTimeout(connect, delay);
             }
         };
+        ws.onclose = event => disconnected(event.code);
+        recoverCurrent.current = () => {
+            if (!isCurrent()) return;
+            // Retire before closing: a dead network need not finish its close handshake.
+            disconnected(1006);
+            ws.close();
+        };
         // The close handler owns retrying failures, including rejected handshakes.
         ws.onerror = () => {};
-    }, [clearTimers, failed, deliver, publish, unconfirmed]);
+    }, [clearTimers, failed, deliver, publish, unconfirmed, waitForSnapshot]);
 
     useEffect(() => {
         active.current = true;
@@ -274,13 +309,21 @@ export default function useWebSocket(options: WebSocketOptions) {
             const ws = wsRef.current;
             if (ws?.readyState === WebSocket.OPEN) {
                 const { state } = optionsRef.current;
-                if (state.game)
-                    ws.send(
-                        JSON.stringify({
-                            type: MessageType.GAME_LOAD,
-                            data: { gameId: state.game.id, playerId: state.playerId },
-                        }),
-                    );
+                if (state.game) {
+                    if (snapshotWait.current?.socket === ws) return;
+                    waitForSnapshot(ws);
+                    try {
+                        ws.send(
+                            JSON.stringify({
+                                type: MessageType.GAME_LOAD,
+                                data: { gameId: state.game.id, playerId: state.playerId },
+                            }),
+                        );
+                    } catch {
+                        recoverCurrent.current?.();
+                        return;
+                    }
+                }
                 for (const entry of pending.current.values())
                     if (entry.uncertain && entry.attempts < COMMAND_ATTEMPTS) deliver(entry);
             } else connect();
@@ -294,14 +337,16 @@ export default function useWebSocket(options: WebSocketOptions) {
             staged.current = null;
             const ws = wsRef.current;
             wsRef.current = null;
+            recoverCurrent.current = null;
             ws?.close();
             document.removeEventListener('visibilitychange', visible);
         };
-    }, [connect, clearTimers, deliver]);
+    }, [connect, clearTimers, deliver, waitForSnapshot]);
 
     useEffect(() => {
         if (!options.state.reconnect) return;
         attempts.current = 0;
+        manualRecovery.current = false;
         options.dispatch({ type: ActionType.setConnecting, payload: { reconnect: false } });
         for (const entry of pending.current.values()) entry.attempts = 0;
         if (wsRef.current?.readyState === WebSocket.OPEN) {

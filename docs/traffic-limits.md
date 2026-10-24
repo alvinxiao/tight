@@ -4,7 +4,8 @@ One backend owns the allowances for both the loopback and selected Wi-Fi listene
 
 | Resource | Burst capacity | Refill or bound |
 | --- | --- | --- |
-| HTTP requests per peer | 120 | 10 per second |
+| API HTTP requests per peer | 120 | 10 per second |
+| Page and static-file HTTP requests per peer | 120 | 10 per second |
 | Host or guest pairing claims per peer | 30 | One every two seconds |
 | WebSocket upgrade attempts per peer | 40 | Two per second |
 | WebSocket commands per peer | 60 | 10 per second, shared across connections |
@@ -13,7 +14,7 @@ One backend owns the allowances for both the loopback and selected Wi-Fi listene
 | Rate-limit peer records | 256 per limiter | Fully refilled idle entries are reclaimed |
 | Queued WebSocket output | 1 MiB | A stalled reader is terminated before another send once above this bound |
 
-HTTP throttling happens before static files, authorization, or body parsing and returns JSON with status 429, Cache-Control: no-store, and Retry-After. Pairing has a separate allowance so a rejected claim burst does not exhaust ordinary host requests. Upgrade throttling returns 429; a full connection budget returns 503. A command burst closes the offending socket with policy code 1008. Reconnecting does not reset its peer's command allowance. Existing connections are retained.
+HTTP throttling happens before static files, authorization, or body parsing and returns JSON with status 429, Cache-Control: no-store, and Retry-After. API paths and page/static-file paths use independent allowances. Loading the app cannot spend the API budget needed to manage saved games, and an API burst cannot prevent the recovery page from loading. Both classes remain bounded, share their allowances across listeners, and ignore forwarded-address headers. Pairing has an additional allowance. Upgrade throttling returns 429; a full connection budget returns 503. A command burst closes the offending socket with policy code 1008. Reconnecting does not reset its peer's command allowance. Existing connections are retained.
 
 Listeners configure a ten-second header timeout, fifteen-second request timeout, five-second keep-alive timeout, and at most 1,000 requests per persistent connection. Node enforces request/header deadlines using its timeout-check interval. Shutdown still closes listeners and upgraded connections explicitly.
 
