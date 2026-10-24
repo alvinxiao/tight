@@ -90,6 +90,7 @@ const ROW_ICON_MAP: Record<RowNameExclude, typeof Resources> = {
 
 function MinusOne(props: { name: RowNameExclude; onClick: (name: RowNameExclude) => void }) {
     const { name, onClick } = props;
+    const label = `Decrease ${name} modifier`;
     const onClickHandler: IconButtonProps['onClick'] = e => {
         e.stopPropagation();
         e.preventDefault();
@@ -97,8 +98,8 @@ function MinusOne(props: { name: RowNameExclude; onClick: (name: RowNameExclude)
     };
 
     return (
-        <Tooltip title="Minus One">
-            <IconButton onClick={onClickHandler}>
+        <Tooltip title={label}>
+            <IconButton aria-label={label} onClick={onClickHandler}>
                 <MinusIcon />
             </IconButton>
         </Tooltip>
@@ -107,6 +108,7 @@ function MinusOne(props: { name: RowNameExclude; onClick: (name: RowNameExclude)
 
 function PlusOne(props: { name: RowNameExclude; onClick: (name: RowNameExclude) => void }) {
     const { name, onClick } = props;
+    const label = `Increase ${name} modifier`;
     const onClickHandler: IconButtonProps['onClick'] = e => {
         e.stopPropagation();
         e.preventDefault();
@@ -114,8 +116,8 @@ function PlusOne(props: { name: RowNameExclude; onClick: (name: RowNameExclude) 
     };
 
     return (
-        <Tooltip title="Plus One">
-            <IconButton onClick={onClickHandler}>
+        <Tooltip title={label}>
+            <IconButton aria-label={label} onClick={onClickHandler}>
                 <AddIcon />
             </IconButton>
         </Tooltip>
@@ -185,7 +187,7 @@ export default function EditPlanetDialog(props: PlayerNameDialogProps) {
                 name,
                 Icon: DMZPlanet,
                 value: planet[name] || false,
-                modifier: modifiers[name] || false,
+                modifier: modifiers[name] ?? planet[name] ?? false,
             };
         }
 
@@ -271,7 +273,7 @@ export default function EditPlanetDialog(props: PlayerNameDialogProps) {
                                 editField = (
                                     <TextField
                                         fullWidth
-                                        id={`${selectId}-${nameField}`}
+                                        id={`${selectId}-${name}`}
                                         label={nameField}
                                         InputLabelProps={{ shrink: true }}
                                         onChange={onTraitsChange}
@@ -307,7 +309,8 @@ export default function EditPlanetDialog(props: PlayerNameDialogProps) {
                                 iconField = <Icon />;
                                 editField = (
                                     <Switch
-                                        value={r.value}
+                                        checked={r.modifier}
+                                        inputProps={{ 'aria-label': 'DMZ' }}
                                         onChange={e => setModifiers(prev => ({ ...prev, DMZ: e.target.checked }))}
                                     />
                                 );
@@ -319,7 +322,7 @@ export default function EditPlanetDialog(props: PlayerNameDialogProps) {
                                         fullWidth
                                         type="number"
                                         value={r.modifier}
-                                        inputProps={{ sx: { textAlign: 'center' } }}
+                                        inputProps={{ sx: { textAlign: 'center' }, 'aria-label': `${name} modifier` }}
                                         InputProps={{
                                             sx: { padding: 0 },
                                             readOnly: true,
