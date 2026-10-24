@@ -89,13 +89,25 @@ test('subscriptions return versioned snapshots without registering an unknown pl
     const f = await fixture(t);
     const before = await f.request(`export?gameId=${f.id}`);
     const { ws, initial } = await f.connect('Unknown player');
+    assert.equal(initial.loadedGameId, f.id);
     assert.equal(initial.playerId, null);
     assert.equal(initial.gameVersion.revision, 1);
     const loaded = await f.snapshot(ws, 'Another unknown player');
+    assert.equal(loaded.loadedGameId, f.id);
     assert.equal(loaded.playerId, null);
     assert.deepEqual(loaded.gameVersion, initial.gameVersion);
     assert.deepEqual(loaded.game.players, []);
     assert.deepEqual(await f.request(`export?gameId=${f.id}`), before);
+});
+
+test('a missing game snapshot still identifies the requested subscription', async t => {
+    const f = await fixture(t);
+    const { ws } = await f.connect();
+    assert.equal(await f.request('delete', { id: f.id }), true);
+    const loaded = await f.snapshot(ws);
+    assert.equal(loaded.loadedGameId, f.id);
+    assert.equal(loaded.game, null);
+    assert.equal(loaded.gameVersion, null);
 });
 
 test('concurrent editors get one saved result and one stale result; IDs reject changed payloads and survive host restart', async t => {
