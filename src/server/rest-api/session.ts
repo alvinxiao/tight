@@ -1,6 +1,8 @@
 import { NextFunction, Request, Response, Router } from 'express';
 import { z } from 'zod';
 import { guestSessionSchema } from 'common/session.js';
+import { GameConnections } from 'common/gameConnections.js';
+import { getGame } from '../database/game.js';
 import { AccessSessions, mayReadGame, SESSION_COOKIE } from '../accessSessions.js';
 import { gameQuerySchema } from '../commandSchemas.js';
 import { parseRequest } from './validation.js';
@@ -16,13 +18,26 @@ function setCookie(req: Request, res: Response, token: string) {
     });
 }
 
-export function sessionRouter(sessions: AccessSessions) {
+export function sessionRouter(sessions: AccessSessions, connections: (gameId: string) => GameConnections) {
     const router = Router();
     router.use('/session', (_req, res, next) => {
         res.setHeader('Cache-Control', 'no-store');
         next();
     });
     router.get('/session', (req, res) => res.json(sessions.resolve(sessions.token(req))));
+    router.get('/session/connections', (req, res) => {
+        if (sessions.resolve(sessions.token(req)).role !== 'host') {
+            res.status(403).json({ error: 'Only the host can view connected devices.' });
+            return;
+        }
+        const parsed = parseRequest(gameQuerySchema, req.query, res);
+        if (!parsed.success) return;
+        if (!getGame(parsed.data.gameId)) {
+            res.status(404).json({ error: 'Game not found.' });
+            return;
+        }
+        res.json(connections(parsed.data.gameId));
+    });
     router.post('/session/host', (req, res) => {
         const parsed = parseRequest(claimSchema, req.body, res);
         if (!parsed.success) return;

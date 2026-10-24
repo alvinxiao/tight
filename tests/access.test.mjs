@@ -490,3 +490,57 @@ test('version-four migration preserves ordinary player and spectator grants in a
         assert.equal(JSON.parse(backup.prepare('SELECT snapshot FROM games WHERE id=?').get(id).snapshot).id, id);
     } finally { backup.close(); }
 });
+
+test('only the host can see game-scoped connected devices, deduplicated across tabs with live permissions', async t => {
+    const f = await fixture(t);
+    const id = await (await f.admin('game/create', {})).json();
+    const other = await (await f.admin('game/create', {})).json();
+    const player = await f.pair(id, 'player', 'Zoë');
+    const editor = await f.pair(id, 'player', 'Alice helper', true);
+    const spectator = await f.pair(id, 'spectator');
+    const secondSpectator = await f.pair(id, 'spectator');
+    const elsewhere = await f.pair(other, 'player', 'Other game');
+    const route = 'session/connections?gameId=' + id;
+    const empty = { players: [], spectators: 0 };
+    let response = await f.admin(route);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(await response.json(), empty, 'paired but disconnected devices are not present');
+    for (const credential of ['', player, editor, spectator, elsewhere]) {
+        assert.equal((await f.request(route, credential)).status, 403);
+    }
+    for (const query of ['', '?gameId=invalid', `?gameId=${id}&extra=1`, `?gameId=${id}&gameId=${other}`]) {
+        assert.equal((await f.admin('session/connections' + query)).status, 400);
+    }
+    await f.connect(f.hostCookie(), id);
+    const { ws: firstTab } = await f.connect(player, id);
+    const { ws: secondTab } = await f.connect(player, id);
+    await f.connect(editor, id);
+    await f.connect(spectator, id);
+    await f.connect(spectator, id);
+    await f.connect(secondSpectator, id);
+    await f.connect(elsewhere, other);
+    const expectedPlayers = [
+        { playerId: 'Alice helper', tableEditing: true },
+        { playerId: 'Zoë', tableEditing: false },
+    ];
+    assert.deepEqual(await (await f.admin(route)).json(), { players: expectedPlayers, spectators: 2 });
+    let closed = once(firstTab, 'close');
+    firstTab.close();
+    await closed;
+    assert.deepEqual(await (await f.admin(route)).json(), { players: expectedPlayers, spectators: 2 });
+    closed = once(secondTab, 'close');
+    secondTab.close();
+    await closed;
+    assert.deepEqual(await (await f.admin(route)).json(), { players: expectedPlayers.slice(0, 1), spectators: 2 });
+    const replacement = await f.pair(id, 'player', 'Alice helper');
+    assert.deepEqual(await (await f.admin(route)).json(), { players: [], spectators: 2 }, 'old open sockets lose presence immediately');
+    await f.connect(replacement, id);
+    assert.deepEqual(await (await f.admin(route)).json(), {
+        players: [{ playerId: 'Alice helper', tableEditing: false }], spectators: 2,
+    });
+    assert.equal((await f.admin('session/revoke', { gameId: id })).status, 200);
+    assert.deepEqual(await (await f.admin(route)).json(), empty);
+    await f.admin('game/delete', { id });
+    assert.equal((await f.admin(route)).status, 404);
+});

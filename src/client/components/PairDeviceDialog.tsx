@@ -20,6 +20,7 @@ import { lanOrigin } from 'common/hosting';
 import { useNativeHosting } from '../NativeHosting';
 import useDialogRequest from '../hooks/useDialogRequest';
 import { readResponse } from '../utils/request';
+import ConnectedDevices from './ConnectedDevices';
 
 const invitationSchema = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/), expiresAt: z.number() });
 export default function PairDeviceDialog({
@@ -43,6 +44,7 @@ export default function PairDeviceDialog({
     const [link, setLink] = useState('');
     const [confirmRevoke, setConfirmRevoke] = useState(false);
     const [revoked, setRevoked] = useState(false);
+    const [accessChanges, setAccessChanges] = useState(0);
     const { pending, error, run, cancel } = useDialogRequest(open);
     useEffect(() => {
         setLink('');
@@ -95,6 +97,7 @@ export default function PairDeviceDialog({
                 setConfirmRevoke(false);
                 setLink('');
                 setRevoked(true);
+                setAccessChanges(value => value + 1);
             },
         );
     return (
@@ -106,6 +109,7 @@ export default function PairDeviceDialog({
                         Choose the person who will use this device. Give the invitation only to that person. It expires
                         after five minutes and works once.
                     </Typography>
+                    {open && <ConnectedDevices gameId={gameId} accessChanges={accessChanges} />}
                     <TextField
                         select
                         id={selectId}
