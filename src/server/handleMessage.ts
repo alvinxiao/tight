@@ -49,7 +49,7 @@ export default function handleMessage({ wss, ws, message }: handleMessageParams)
     const { gameId } = data;
     const requestedFactionName = 'factionName' in data ? data.factionName : null;
 
-    logWS(false, getWebSocketLogId(ws), { type, data });
+    logWS(false, getWebSocketLogId(ws), type);
 
     // Following actions require a game
     const game = GameDB.getGame(gameId);

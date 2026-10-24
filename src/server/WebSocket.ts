@@ -17,7 +17,7 @@ export interface WebSocket extends WS {
 }
 
 export function getWebSocketLogId(ws: WebSocket) {
-    return `${ws.socketId} (${ws.gameId || 'no game'}, ${ws.playerId || 'anonymous'})`;
+    return ws.socketId || 'unidentified';
 }
 
 export interface SendDataParams {
@@ -38,7 +38,7 @@ export function sendData({ ws, type, data, error }: SendDataParams) {
         return;
     }
     const id = getWebSocketLogId(ws);
-    logWS(true, id, { type, data, error });
+    logWS(true, id, type);
     ws.send(JSON.stringify({ type, data, error }));
 }
 

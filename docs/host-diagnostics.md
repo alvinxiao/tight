@@ -12,6 +12,8 @@ Lifecycle events cover startup, startup failure, bind failures, sharing changes,
 
 The desktop stores up to three 64 KiB event files in a `diagnostics` folder inside its Electron profile. With `TIGHT_DATA_DIR`, they live in that data folder instead. Exports include at most the latest 200 valid events. Unwritable logging storage, unreadable log files, or log files exceeding the size limit do not stop hosting; the report marks persistent logs unavailable and includes at most 200 events retained in memory for the current launch.
 
+WebSocket traffic logs use a generated connection UUID, direction, message type, and timestamp. They do not include game codes, player names, command bodies, or response bodies, including in development and debug mode. Connection open/close and heartbeat termination logs use the same UUID. This protects private objective text from routine traffic logging while preserving connection-level troubleshooting. Raw error output is separate from this traffic-log policy and is not included in diagnostic exports. The standalone CLI still prints its one-use host-claim URL at startup; treat that startup output as a credential.
+
 ## Closing and sleeping
 
 Closing the window asks whether to keep hosting. The prompt includes the current number of paired player devices if the backend responds. Quitting closes both listeners and player sockets, clears timers, and releases the database. The native launcher allows five seconds before terminating an unresponsive backend. Changes confirmed by the command protocol are already committed; quitting does not wait for an unconfirmed browser action.
