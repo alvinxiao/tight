@@ -29,6 +29,12 @@ The header shows Saving, Saved, Unconfirmed, or Not saved. Rejections show a dis
 
 Outstanding payloads are not written to browser storage. Closing or reloading a page discards them. After reloading, review the current game before repeating an uncertain action. A backend restart preserves committed receipts; a browser restart does not preserve unconfirmed local requests.
 
+Returning to a visible game requests a full snapshot on the existing open socket and shows Connecting while waiting. A valid full snapshot cancels the ten-second deadline. Repeated visibility events share that pending request rather than extending its deadline. A failed send or an expired deadline retires the old socket before initiating its close handshake, so a silent connection cannot block normal bounded reconnection. Late events from the retired socket cannot change the current state or timers. This recovery keeps outstanding command IDs, bytes, and remaining attempts unchanged.
+
+New connections also wait for their initial full snapshot with the same deadline. Opening a socket alone does not reset the connection-attempt budget or mark the connection ready. Only a validated full snapshot does that. Reconnecting delivers uncertain commands after this snapshot and keeps their original identities. A host that accepts sockets without initializing them therefore reaches the same five-attempt limit as failed handshakes. Browser suspension can delay timer execution; these deadlines run when the browser resumes JavaScript.
+
+Policy and storage closes, codes 1008 and 1011, remain blocked across visibility changes. Only explicit **Reconnect**, **Check last change**, or reloading the page starts recovery from those closures. Foreground resynchronization does not override authorization or storage failures.
+
 Receipts retain the most recent 2,000 per game and 10,000 overall. A pruned command that changed state has an old revision and cannot apply twice. If a pruned no-op is repeated without an intervening state change, it remains a no-op. Revisions never reset while a game exists, including game restart; a newly created or imported game receives a new incarnation. Metadata and receipts stay outside portable game exports.
 
 ## Verification
