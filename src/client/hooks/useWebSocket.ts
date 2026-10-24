@@ -137,8 +137,7 @@ export default function useWebSocket(options: WebSocketOptions) {
             } catch {
                 entry.uncertain = true;
                 publish({ kind: 'unconfirmed', message: 'The connection closed before your change was confirmed.' });
-                failed();
-                ws.close();
+                recoverCurrent.current?.();
                 return false;
             }
             entry.timer = setTimeout(() => {
@@ -148,7 +147,7 @@ export default function useWebSocket(options: WebSocketOptions) {
             }, ACK_TIMEOUT);
             return true;
         },
-        [publish, failed],
+        [publish],
     );
 
     const flush = useCallback(() => {
