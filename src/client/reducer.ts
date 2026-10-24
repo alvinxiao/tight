@@ -26,6 +26,7 @@ export interface State {
     commandNotice: CommandNotice | null;
     theme: AppTheme;
     initialized: boolean;
+    snapshotSequence: number;
     connecting: boolean;
     connectError: boolean;
     reconnect: boolean;
@@ -45,6 +46,7 @@ export const initialState: State = {
     saveStatus: 'idle',
     commandNotice: null,
     initialized: false, // state is populated from server data.
+    snapshotSequence: 0,
     connecting: false,
     connectError: false,
     reconnect: false,
@@ -139,7 +141,13 @@ export default function reducer(state: State, action: Action): State {
             return { ...state, strategyCards: payload };
 
         case ActionType.setState: {
-            const next = validateState({ ...state, ...payload, initialized: true });
+            // A missing-game response still needs to be observed when game was already null.
+            const next = validateState({
+                ...state,
+                ...payload,
+                initialized: true,
+                snapshotSequence: state.snapshotSequence + 1,
+            });
             sessionStorage.setItem('playerId', next.playerId ?? '');
             return next;
         }
