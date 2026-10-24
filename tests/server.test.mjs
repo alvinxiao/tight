@@ -6,6 +6,7 @@ import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 import WebSocket from 'ws';
 import ts from 'typescript';
 import { claimHost, withCookie } from './helpers/host-access.mjs';
@@ -96,6 +97,41 @@ async function gameTest(t, options = {}) {
     t.after(() => ws.close());
     return { id, ws };
 }
+
+test('WebSocket diagnostics retain message types without player names or private game payloads', async t => {
+    // The standalone host-claim URL is an intentional startup credential. Only inspect later traffic.
+    logs = '';
+    const player = 'Private player 机密';
+    const description = 'Private objective must never reach standard output';
+    const { id, ws } = await gameTest(t, { numPlayers: 1 });
+    await command(ws, T.GAME_ADD_PLAYER, { gameId: id, playerId: player });
+    await command(ws, T.GAME_UPDATE_FACTION, {
+        gameId: id, order: 0, name: 'The Arborec', color: '#d50000', playerIds: [player],
+    });
+    await command(ws, T.SET_SECRET_OBJECTIVE, {
+        gameId: id, factionName: 'The Arborec',
+        secretObjectives: Array.from({ length: 3 }, (_, index) => ({
+            cleared: false, objective: { id: -index - 1, description, vp: 1 },
+        })),
+    });
+    const state = await snapshot(id, ws);
+    assert.equal(state.factions[0].secretObjectives[0].objective.description, description);
+    const second = await connect(id, player);
+    assert.equal(second.playerId, player);
+    const closed = once(second.ws, 'close');
+    second.ws.close();
+    await closed;
+    while (!logs.includes('Closing web socket connection')) {
+        await once(server.stdout, 'data', { signal: AbortSignal.timeout(3000) });
+    }
+    const traffic = stripVTControlCharacters(logs);
+    for (const privateValue of [player, description, 'secretObjectives', cookie.split('=')[1]]) {
+        assert.equal(traffic.includes(privateValue), false, `Traffic logs exposed ${privateValue}`);
+    }
+    assert.doesNotMatch(traffic, new RegExp(`\\b${id}\\b`));
+    assert.match(traffic, /Receiving from [a-f0-9-]{36} SET_SECRET_OBJECTIVE/);
+    assert.match(traffic, /Sending to [a-f0-9-]{36} BROADCAST_INITIALIZE/);
+});
 
 test('round progression respects configured limits of 1, 2, 10, and 20', async t => {
     for (const limit of [1, 2, 10, 20]) {
