@@ -31,6 +31,8 @@ type Notice = { severity: 'success' | 'error'; message: string } | null;
 function Home() {
     const session = useSession();
     const importInput = useRef<HTMLInputElement>(null);
+    const libraryHeading = useRef<HTMLHeadingElement>(null);
+    const actionFocus = useRef<HTMLElement | null>(null);
     const [openCreateDialog, setOpenCreateDialog] = useState(false);
     const [openJoinDialog, setOpenJoinDialog] = useState(false);
     const [saved, setSaved] = useState<SavedGames>({ kind: 'loading' });
@@ -39,6 +41,17 @@ function Home() {
     const [showArchived, setShowArchived] = useState(false);
     const [rename, setRename] = useState<{ id: string; name: string } | null>(null);
     const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [dialogPresent, setDialogPresent] = useState(false);
+
+    useEffect(() => {
+        if (busy || rename !== null || deleteId !== null || dialogPresent) return;
+        const opener = actionFocus.current;
+        actionFocus.current = null;
+        // Disabled buttons can lose focus, and removed cards need a stable fallback.
+        if (opener && document.activeElement === document.body) {
+            (opener.isConnected ? opener : libraryHeading.current)?.focus();
+        }
+    }, [busy, rename, deleteId, dialogPresent]);
 
     async function refresh(signal?: AbortSignal) {
         setNotice(null);
@@ -59,6 +72,10 @@ function Home() {
     }, []);
 
     async function act(operation: () => Promise<string | void>) {
+        const opener = document.activeElement;
+        actionFocus.current = opener instanceof HTMLElement && opener !== document.body && !opener.closest('[role="dialog"]')
+            ? opener
+            : libraryHeading.current;
         setBusy(true);
         setNotice(null);
         try {
@@ -98,7 +115,7 @@ function Home() {
                 </Button>
             </Stack>
             <Box component="section" aria-labelledby="saved-games-heading">
-                <Typography id="saved-games-heading" variant="h5" component="h2">
+                <Typography id="saved-games-heading" variant="h5" component="h2" ref={libraryHeading} tabIndex={-1}>
                     Saved games
                 </Typography>
                 <Typography color="text.secondary" sx={{ mb: 2 }}>
@@ -227,6 +244,7 @@ function Home() {
                 )}
             </Box>
             <Dialog open={rename !== null} onClose={() => { if (!busy) setRename(null); }}
+                TransitionProps={{ onEnter: () => setDialogPresent(true), onExited: () => setDialogPresent(false) }}
                 aria-labelledby="rename-game-title" fullWidth maxWidth="sm">
                 <DialogTitle id="rename-game-title">Rename saved game</DialogTitle>
                 <Box component="form" onSubmit={event => {
@@ -253,6 +271,7 @@ function Home() {
             </Dialog>
             <Dialog
                 open={deleteId !== null}
+                TransitionProps={{ onEnter: () => setDialogPresent(true), onExited: () => setDialogPresent(false) }}
                 onClose={() => {
                     if (!busy) setDeleteId(null);
                 }}

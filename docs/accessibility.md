@@ -10,4 +10,6 @@ The planet modifier editor gives each numeric field and increase/decrease button
 
 Saved-game refreshes retain the loaded cards until the replacement list arrives. The rename dialog can therefore return keyboard focus to its original button after a successful save. A delayed-refresh journey checks the opener remains mounted, Save and Escape restore focus, and library actions stay disabled while manual refresh is pending.
 
+The library action owner also restores focus after a temporarily disabled control becomes available. If archive or delete removes that control, focus moves to the Saved games heading, which is programmatically focusable without adding a Tab stop. Restoration waits until a closing dialog is removed and preserves focus that the user moved to another control while waiting. Delayed-response journeys cover refresh, archive, deletion, and that deliberate focus change.
+
 Before release, issue #17 still requires assistive-technology and manual keyboard qualification of the remaining dialogs, planet editing, multiple simultaneous faction editors, reference pages, and phone clients. Check both themes, 200% and 400% zoom, visible focus, contrast and non-color state cues, error announcements, touch targets, and focus after destructive actions. Automated scans cannot establish those results by themselves.
