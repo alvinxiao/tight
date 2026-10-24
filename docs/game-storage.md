@@ -1,8 +1,8 @@
 # Game storage and recovery
 
-The backend stores games in `games.sqlite` using Node's built-in SQLite support. Use Node 24.19.0 (recommended) or at least 22.15.0. The database format is version 3. Versions 1 and 2 are validated and backed up under `backups/migrations` before migration. Version 2 added hashed device grants; version 3 adds game incarnations, revisions, and bounded command receipts. Unknown versions remain untouched.
+The backend stores games in `games.sqlite` using Node's built-in SQLite support. Use Node 24.19.0 (recommended) or at least 22.15.0. The database format is version 5. Versions 1 through 4 are validated and backed up under `backups/migrations` before migration. Version 2 added hashed device grants; version 3 added game incarnations, revisions, and bounded command receipts. Version 4 added saved-library metadata, and version 5 adds host-approved table-editing grants. Unknown versions remain untouched.
 
-The default directory is `%LOCALAPPDATA%\TIGHT` on Windows, or `$XDG_DATA_HOME/tight` on other systems (falling back to `~/.local/share/tight`). `TIGHT_DATA_DIR` overrides the directory. Data stays outside the application installation and survives a server restart. The future Electron launcher must pass its per-user data directory explicitly.
+The default directory is `%LOCALAPPDATA%\TIGHT` on Windows, or `$XDG_DATA_HOME/tight` on other systems (falling back to `~/.local/share/tight`). `TIGHT_DATA_DIR` overrides the directory. Data stays outside the application installation and survives a server restart. The Electron launcher uses the same game-storage location and keeps its browser profile outside the installation folder.
 
 For this cloud workspace, set `TIGHT_DATA_DIR=/workspace/.tight-data` before starting the server. Do not commit that directory. Automated server and browser tests use separate temporary directories and never use the normal game database.
 
@@ -10,7 +10,7 @@ For this cloud workspace, set `TIGHT_DATA_DIR=/workspace/.tight-data` before sta
 
 One backend holds an exclusive SQLite lock for its lifetime. Starting another backend with the same directory fails before it starts listening. Closing or force-killing the first process releases the lock; no PID file needs removal.
 
-Game creation, restart, import, and deletion write to SQLite before returning success. A WebSocket command commits its changed game before the next broadcast. If a write fails, the backend restores the previous game, pending broadcast flags, and socket player binding. It closes the sending connection with code 1011, and the interface offers reconnect. HTTP storage failures return 503. Reconnect to inspect the committed state before retrying; See [command confirmation](command-protocol.md) for acknowledgments and safe retries.
+Game creation, restart, import, and deletion write to SQLite before returning success. A WebSocket command commits its changed game before the next broadcast. If a write fails, the backend restores the previous game, pending broadcast flags, and socket player binding. It closes the sending connection with code 1011, and the interface offers reconnect. HTTP storage failures return 503. Reconnect to inspect the committed state before retrying. See [command confirmation](command-protocol.md) for acknowledgments and safe retries.
 
 SQLite uses its rollback journal and `synchronous=FULL` for interrupted-write recovery. Games no longer expire after inactivity. Explicit deletion remains permanent in the current database.
 
@@ -18,7 +18,7 @@ SQLite uses its rollback journal and `synchronous=FULL` for interrupted-write re
 
 After loading a valid, nonempty database at startup, the backend writes a complete SQLite backup under `backups/`. It keeps the three newest startup backups. These are startup snapshots, not a backup after every move. Keep separate exports for longer-term protection.
 
-An unsupported schema version, malformed saved game, or invalid database stops startup. The backend does not replace the file with an empty database. Migration backups retain the original format so recovery can use a compatible application version. A version-4 database cannot be opened by an older preview; restore a pre-migration backup into a separate data folder if a downgrade is necessary.
+An unsupported schema version, malformed saved game, or invalid database stops startup. The backend does not replace the file with an empty database. Migration backups retain the original format so recovery can use a compatible application version. A version-5 database cannot be opened by a preview that supports only an earlier schema; restore a pre-migration backup into a separate data folder if a downgrade is necessary.
 
 To restore a backup:
 
@@ -49,6 +49,6 @@ The list sorts by the last committed game change. Renaming, archiving, reading, 
 
 Names, archive status, and the last-played timestamp belong to this host’s library. SQLite stores them beside the snapshot, separately from game state and command revisions. Organization changes therefore cannot stale an outstanding phone command. A whole-database backup preserves library details. Portable JSON exports keep the existing game-only format and do not include the name or archive status.
 
-Database version 4 adds these fields. Versions 1, 2, and 3 are validated and backed up under `backups/migrations` before migration. Existing games begin unnamed and unarchived, with their creation time as the initial last-played value because older versions did not record it. Invalid persisted metadata stops startup while preserving the database.
+Database version 4 introduced these fields. Migration to version 5 preserves them and validates them before changing the database. Existing games begin unnamed and unarchived, with their creation time as the initial last-played value because older versions did not record it. Invalid persisted metadata stops startup while preserving the database.
 
 Keeping these fields in game snapshots would change live revisions for library-only actions and alter portable exports. A separate JSON sidecar would lose SQLite’s write and backup guarantees. Columns on the existing game row keep creation, updates, deletion, and backups consistent without an additional synchronization step.
