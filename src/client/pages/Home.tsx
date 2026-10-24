@@ -42,7 +42,8 @@ function Home() {
 
     async function refresh(signal?: AbortSignal) {
         setNotice(null);
-        setSaved({ kind: 'loading' });
+        // Keep ready cards mounted so closing a dialog can restore its original opener.
+        setSaved(previous => previous.kind === 'ready' ? previous : { kind: 'loading' });
         try {
             const games = await fetchSavedGames(signal);
             if (!signal?.aborted) setSaved({ kind: 'ready', games });
@@ -104,7 +105,7 @@ function Home() {
                     Games saved on this host stay here when it restarts. Export a copy to keep a separate backup.
                 </Typography>
                 <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-                    <Button disabled={busy || saved.kind === 'loading'} onClick={() => void refresh()}>
+                    <Button disabled={busy || saved.kind === 'loading'} onClick={() => void act(() => refresh())}>
                         Refresh saved games
                     </Button>
                     <Button onClick={() => importInput.current?.click()} disabled={busy || saved.kind === 'loading'}>
@@ -147,7 +148,7 @@ function Home() {
                     <Alert
                         severity="error"
                         action={
-                            <Button color="inherit" onClick={() => void refresh()}>
+                            <Button color="inherit" disabled={busy} onClick={() => void act(() => refresh())}>
                                 Retry
                             </Button>
                         }
