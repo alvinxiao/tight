@@ -29,6 +29,8 @@ A table editor is a paired player whose host explicitly checked **Allow table-wi
 
 To remove the grant, create a replacement invitation for the same player name with the option unchecked and have the intended device claim it. Claiming replaces the previous device grant and disconnects its sockets. **Disconnect paired devices** immediately revokes all device grants and outstanding invitations for the game.
 
+The host can expand **Connected devices** in the pairing dialog for a live, game-scoped list. Player names and their current table-editing grants appear only while connected. Spectators appear as a device count. Multiple tabs with the same credential count once. The host-only endpoint excludes credentials, hashes, addresses, and private game data. See [connected devices](connected-devices.md) for refresh and disconnect behavior.
+
 ## Alternatives
 
 Trusting the game code or chosen name preserves the current impersonation flaw. Trusting loopback addresses alone does not distinguish the desktop host from other local clients and does not extend safely to LAN hosting. Public-key device identities add key management without removing the need for host approval and recovery. Random bearer capabilities with server-side grants fit the local host and browser clients, and support immediate revocation.

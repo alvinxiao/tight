@@ -60,7 +60,7 @@ export async function startBackend(options: BackendOptions) {
         app.use(express.json({ limit: '64kb' }));
         app.use(express.urlencoded({ extended: false, limit: '64kb', parameterLimit: 100 }));
 
-        app.use('/api', sessionRouter(sessions));
+        app.use('/api', sessionRouter(sessions, gameId => sockets.getGameConnections(gameId)));
         app.use('/api', initializeRouter());
         app.use('/api', (_req: Request, res: Response) => {
             res.status(404).json({ error: 'API operation not found' });

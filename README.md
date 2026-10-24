@@ -30,6 +30,8 @@ Invitations expire after five minutes and can be claimed once. A game code or th
 
 For a trusted helper, the host can check **Allow table-wide editing** before creating a player invitation. Leave it unchecked for ordinary player access.
 
+In **Pair a device**, expand **Connected devices** to see connected player names, their editing permission, and the spectator-device count. The host is excluded, and multiple tabs in the same paired browser count once. The list refreshes while open and offers retry when a read fails. See [connected devices](docs/connected-devices.md).
+
 **Stop Wi-Fi sharing** disconnects phones while leaving the desktop game open. After a normal quit, sharing can resume only if the previously approved adapter name and private IPv4 address still match. After a crash or an address change, select the current network and create fresh invitations. A new app session can use a different port, so do not rely on old invitation screenshots.
 
 If a phone cannot connect, check Windows Private-network firewall access and router guest/client isolation. TIGHT does not change firewall rules automatically. Do not disable the firewall or forward router ports. LAN sharing uses HTTP and does not encrypt traffic against a hostile local network. Internet hosting is outside the supported workflow.

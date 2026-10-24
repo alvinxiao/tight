@@ -8,6 +8,7 @@ import { type Server as HttpsServer } from 'https';
 import { WebSocketServer as WSServer, WebSocket as WebSocketType } from 'ws';
 
 import { Session } from 'common/session.js';
+import { GameConnections } from 'common/gameConnections.js';
 import { MessageType } from 'common/message.js';
 import uuidv4 from 'common/uuidv4.js';
 
@@ -359,6 +360,23 @@ export default function initialize(
     return {
         attach,
         detach,
+        getGameConnections: (gameId: string): GameConnections => {
+            const devices = new Set<string>();
+            const players = new Map<string, GameConnections['players'][number]>();
+            let spectators = 0;
+            for (const socket of wss.clients) {
+                const ws = socket as WebSocket;
+                if (ws.readyState !== WebSocketType.OPEN || ws.gameId !== gameId || !ws.accessToken) continue;
+                if (devices.has(ws.accessToken)) continue;
+                const access = sessions.resolve(ws.accessToken);
+                if ((access.role !== 'player' && access.role !== 'spectator') || access.gameId !== gameId) continue;
+                devices.add(ws.accessToken);
+                if (access.role === 'player') {
+                    players.set(access.playerId, { playerId: access.playerId, tableEditing: access.tableEditing === true });
+                } else spectators += 1;
+            }
+            return { players: [...players.values()].sort((a, b) => a.playerId.localeCompare(b.playerId)), spectators };
+        },
         getConnections: () => {
             const players = new Set<string>();
             let connections = 0;
