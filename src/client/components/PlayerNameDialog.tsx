@@ -102,7 +102,7 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
         e.preventDefault();
         e.stopPropagation();
 
-        if (!gameId) {
+        if (!gameId || joining || !isPlayerName(selectedPlayerId)) {
             return;
         }
 
@@ -156,6 +156,7 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
                             <TextField
                                 id={selectId}
                                 label="Select Player"
+                                disabled={joining}
                                 select
                                 value={
                                     game.players.includes(selectedPlayerId) ? selectedPlayerId : CREATE_NEW_PLAYER_VALUE
@@ -183,6 +184,7 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
                                     variant="outlined"
                                     label="Enter Name"
                                     inputProps={{ maxLength: MAX_PLAYER_NAME_LENGTH }}
+                                    InputProps={{ readOnly: joining }}
                                     error={Boolean(selectedPlayerId) && !isPlayerName(selectedPlayerId)}
                                     helperText={
                                         selectedPlayerId && !isPlayerName(selectedPlayerId)
@@ -197,7 +199,10 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
                     <Grid item sx={styles.gridItem}>
                         <FormControl fullWidth variant="standard">
                             <Button
-                                disabled={!isPlayerName(selectedPlayerId) || joining}
+                                disabled={!isPlayerName(selectedPlayerId)}
+                                aria-disabled={!isPlayerName(selectedPlayerId) || joining}
+                                aria-busy={joining}
+                                aria-label="Continue"
                                 sx={styles.joinButton}
                                 color="primary"
                                 variant="contained"
