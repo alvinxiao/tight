@@ -1,4 +1,4 @@
-import React, { useId, useEffect, useState } from 'react';
+import React, { useId, useEffect, useRef, useState } from 'react';
 import {
     Alert,
     Button,
@@ -21,6 +21,16 @@ export default function SharingButton() {
     const [open, setOpen] = useState(false);
     const [selected, setSelected] = useState('');
     const [error, setError] = useState(false);
+    const requestFocus = useRef<HTMLElement | null>(null);
+    const closeButton = useRef<HTMLButtonElement>(null);
+    useEffect(() => {
+        if (pending) return;
+        const opener = requestFocus.current;
+        requestFocus.current = null;
+        const target = opener?.isConnected ? opener : closeButton.current;
+        const focused = document.activeElement;
+        if (open && opener && target && focused !== target && focused?.contains(target)) target.focus();
+    }, [open, pending]);
     useEffect(() => {
         if (state.kind === 'ready' && selected && !state.value.interfaces.some(adapter => adapter.address === selected))
             setSelected('');
@@ -29,6 +39,9 @@ export default function SharingButton() {
     const hosting = state.kind === 'ready' ? state.value : null;
     const origin = hosting ? lanOrigin(hosting) : null;
     const apply = async (address: string | null) => {
+        if (pending) return;
+        const opener = document.activeElement;
+        requestFocus.current = opener instanceof HTMLElement ? opener : null;
         setError(false);
         try {
             await change(address);
@@ -97,14 +110,23 @@ export default function SharingButton() {
                                     ))}
                                 </TextField>
                                 <Button
-                                    disabled={pending || !selected}
+                                    disabled={!selected}
+                                    aria-disabled={pending || !selected}
+                                    aria-busy={pending}
+                                    sx={{ '&[aria-disabled="true"]': { color: 'action.disabled', bgcolor: 'action.disabledBackground' } }}
                                     variant="contained"
-                                    onClick={() => void apply(selected)}
+                                    onClick={() => { if (selected) void apply(selected); }}
                                 >
                                     Start sharing on this network
                                 </Button>
                                 {hosting.mode === 'lan' && (
-                                    <Button disabled={pending} color="error" onClick={() => void apply(null)}>
+                                    <Button
+                                        aria-disabled={pending}
+                                        aria-busy={pending}
+                                        sx={{ '&[aria-disabled="true"]': { color: 'action.disabled' } }}
+                                        color="error"
+                                        onClick={() => void apply(null)}
+                                    >
                                         Stop Wi-Fi sharing
                                     </Button>
                                 )}
@@ -149,7 +171,12 @@ export default function SharingButton() {
                     <Button disabled={pending} onClick={() => void refresh()}>
                         Refresh networks
                     </Button>
-                    <Button disabled={pending} onClick={() => setOpen(false)}>
+                    <Button
+                        ref={closeButton}
+                        aria-disabled={pending}
+                        sx={{ '&[aria-disabled="true"]': { color: 'action.disabled' } }}
+                        onClick={() => { if (!pending) setOpen(false); }}
+                    >
                         Close
                     </Button>
                 </DialogActions>
