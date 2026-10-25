@@ -17,6 +17,15 @@ export default function SessionGate({ children }: React.PropsWithChildren) {
     const [gate, setGate] = useState<Gate>({ kind: 'loading' });
     const [attempt, setAttempt] = useState(0);
     useEffect(() => {
+        const openInvitation = () => {
+            const fragment = new URLSearchParams(window.location.hash.slice(1));
+            // A replacement identity needs fresh session and game state throughout the app.
+            if (fragment.get('host') || fragment.get('pair')) window.location.reload();
+        };
+        window.addEventListener('hashchange', openInvitation);
+        return () => window.removeEventListener('hashchange', openInvitation);
+    }, []);
+    useEffect(() => {
         const controller = new AbortController();
         const load = async () => {
             if (claim) {
