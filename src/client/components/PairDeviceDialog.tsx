@@ -1,4 +1,4 @@
-import React, { useId, useEffect, useState } from 'react';
+import React, { useId, useEffect, useRef, useState } from 'react';
 import {
     Alert,
     Checkbox,
@@ -33,6 +33,7 @@ export default function PairDeviceDialog({
     onClose: () => void;
 }) {
     const selectId = useId();
+    const closeButton = useRef<HTMLButtonElement>(null);
     const { state: native } = useNativeHosting();
     const sharingOrigin = native.kind === 'ready' ? lanOrigin(native.value) : null;
     const baseOrigin = sharingOrigin || window.location.origin;
@@ -45,7 +46,7 @@ export default function PairDeviceDialog({
     const [confirmRevoke, setConfirmRevoke] = useState(false);
     const [revoked, setRevoked] = useState(false);
     const [accessChanges, setAccessChanges] = useState(0);
-    const { pending, error, run, cancel } = useDialogRequest(open);
+    const { pending, error, run, cancel } = useDialogRequest(open, closeButton);
     useEffect(() => {
         setLink('');
         setRevoked(false);
@@ -219,7 +220,7 @@ export default function PairDeviceDialog({
                 </Stack>
             </DialogContent>
             <DialogActions>
-                <Button onClick={close}>Close</Button>
+                <Button ref={closeButton} onClick={close}>Close</Button>
                 <Button
                     onClick={create}
                     disabled={pending || networkMissing || (role === 'player' && !isPlayerName(name))}

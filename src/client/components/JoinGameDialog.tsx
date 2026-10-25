@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import CloseIcon from '@mui/icons-material/Close';
 import {
     AppBar,
+    Alert,
     Button,
     CircularProgress,
     Dialog,
@@ -55,11 +56,15 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
     const { gameId: currentGameId } = useGameInfo();
     const { dispatch } = useAppContext();
 
+    const gameCodeInput = useRef<HTMLInputElement>(null);
     const [gameId, setGameId] = useState('');
     const [invalid, setInvalid] = useState(false);
-    const { pending: joining, error: networkError, run, cancel } = useDialogRequest(open);
+    const { pending: joining, error: networkError, run, cancel } = useDialogRequest(open, gameCodeInput);
     const error = invalid ? 'invalid' : networkError ? 'network' : null;
-    const [canRejoin, setCanRejoin] = useState(true);
+    const [missingRejoin, setMissingRejoin] = useState<string | null>(null);
+    const canRejoin = missingRejoin !== currentGameId;
+    const rejoinLabel = `Rejoin "${currentGameId}"`;
+    const rejoinNewPlayerLabel = `${rejoinLabel} as new player`;
 
     const navigate = useNavigate();
 
@@ -85,7 +90,7 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                     navigate(`/${id}`);
                 } else {
                     if (id === currentGameId) {
-                        setCanRejoin(false);
+                        setMissingRejoin(id);
                     }
 
                     if (id === gameId) {
@@ -111,10 +116,14 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                 </Typography>
             </AppBar>
             <DialogContent dividers>
+                {missingRejoin && <Alert severity="warning" sx={{ mb: 2 }}>
+                    Game {missingRejoin} is no longer available. Enter another game code.
+                </Alert>}
                 <Grid container direction="column" justifyContent="center" alignItems="center" spacing={2}>
                     <Grid item sx={styles.gridItem}>
                         <FormControl fullWidth variant="standard">
                             <TextField
+                                inputRef={gameCodeInput}
                                 color="primary"
                                 variant="outlined"
                                 label="Game Code"
@@ -151,7 +160,7 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                             <Grid item sx={styles.gridItem}>
                                 <FormControl fullWidth variant="standard">
                                     <Button
-                                        aria-label={`Rejoin "${currentGameId}"}`}
+                                        aria-label={rejoinLabel}
                                         disabled={joining}
                                         sx={styles.joinButton}
                                         color="primary"
@@ -159,14 +168,14 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                                         size="large"
                                         onClick={e => onJoinClick(e, currentGameId)}
                                     >
-                                        {joining ? <CircularProgress aria-label="Joining game" size={24} /> : `Rejoin "${currentGameId}"`}
+                                        {joining ? <CircularProgress aria-label="Joining game" size={24} /> : rejoinLabel}
                                     </Button>
                                 </FormControl>
                             </Grid>
                             <Grid item sx={styles.gridItem}>
                                 <FormControl fullWidth variant="standard">
                                     <Button
-                                        aria-label={`Rejoin "${currentGameId}" as new player`}
+                                        aria-label={rejoinNewPlayerLabel}
                                         disabled={joining}
                                         sx={styles.joinButton}
                                         color="primary"
@@ -180,7 +189,7 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                                         {joining ? (
                                             <CircularProgress aria-label="Joining game" size={24} />
                                         ) : (
-                                            `Rejoin "${currentGameId}" as new player`
+                                            rejoinNewPlayerLabel
                                         )}
                                     </Button>
                                 </FormControl>
