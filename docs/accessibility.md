@@ -18,4 +18,6 @@ Create, join, restart, and invitation requests share focus recovery for submit c
 
 Canceling device disconnection with Keep devices connected returns focus to Disconnect paired devices after the confirmation controls disappear. Enter and Space journeys check repeated cancellation, navigation to Close, focus restoration to Pair a device, and successful use of an invitation that cancellation must leave valid.
 
+Connected-device Refresh and Retry stay focusable while loading, with unavailable and busy states exposed to assistive technology. Their activation handler ignores input until the read completes. Keyboard journeys cover successful and failed refreshes, repeated Enter and Space during a pending read, focus deliberately moved to Close, retry, and polling cleanup when the panel collapses.
+
 Before release, issue #17 still requires assistive-technology and manual keyboard qualification of the remaining dialogs, planet editing, multiple simultaneous faction editors, reference pages, and phone clients. Check both themes, 200% and 400% zoom, visible focus, contrast and non-color state cues, error announcements, touch targets, and focus after destructive actions. Automated scans cannot establish those results by themselves.

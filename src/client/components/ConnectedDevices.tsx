@@ -67,10 +67,16 @@ function ConnectionList({ gameId }: { gameId: string }) {
                     <Typography>Spectator devices connected: {state.value.spectators}</Typography>
                 </>
             )}
-            <Button disabled={state.kind === 'loading'} onClick={() => {
-                setState({ kind: 'loading' });
-                setRefresh(value => value + 1);
-            }}>
+            <Button
+                aria-disabled={state.kind === 'loading'}
+                aria-busy={state.kind === 'loading'}
+                sx={{ '&[aria-disabled="true"]': { color: 'action.disabled' } }}
+                onClick={() => {
+                    if (state.kind === 'loading') return;
+                    setState({ kind: 'loading' });
+                    setRefresh(value => value + 1);
+                }}
+            >
                 {state.kind === 'failed' ? 'Retry connected devices' : 'Refresh connected devices'}
             </Button>
         </Stack>
