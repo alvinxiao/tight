@@ -82,7 +82,6 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
             return;
         }
         setInvalid(false);
-        setMissingRejoin(null);
 
         void run(
             signal => api.gameValidate({ gameId: id }, { signal }),
