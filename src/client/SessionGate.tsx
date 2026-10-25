@@ -4,7 +4,12 @@ import { readResponse } from './utils/request';
 
 const SessionContext = createContext<Session>({ role: 'unpaired' });
 export const useSession = () => useContext(SessionContext);
-type Gate = { kind: 'loading' } | { kind: 'failed'; message: string } | { kind: 'ready'; session: Session };
+type Gate =
+    | { kind: 'loading' }
+    | { kind: 'failed'; message: string }
+    | { kind: 'retrying'; message: string }
+    | { kind: 'checking' }
+    | { kind: 'ready'; session: Session };
 
 export default function SessionGate({ children }: React.PropsWithChildren) {
     const [claim] = useState(() => {
@@ -17,6 +22,18 @@ export default function SessionGate({ children }: React.PropsWithChildren) {
     const [gate, setGate] = useState<Gate>({ kind: 'loading' });
     const [attempt, setAttempt] = useState(0);
     const claimAccepted = useRef(false);
+    const active = useRef<AbortController | null>(null);
+    const requestFocus = useRef<HTMLElement | null>(null);
+    const actionButton = useRef<HTMLButtonElement>(null);
+    const pending = gate.kind === 'retrying' || gate.kind === 'checking';
+    useEffect(() => {
+        if (gate.kind === 'loading' || gate.kind === 'retrying' || gate.kind === 'checking') return;
+        const opener = requestFocus.current;
+        requestFocus.current = null;
+        const target = actionButton.current;
+        const focused = document.activeElement;
+        if (opener && target && focused !== target && focused?.contains(target)) target.focus();
+    }, [gate]);
     useEffect(() => {
         const openInvitation = () => {
             const fragment = new URLSearchParams(window.location.hash.slice(1));
@@ -27,7 +44,8 @@ export default function SessionGate({ children }: React.PropsWithChildren) {
         return () => window.removeEventListener('hashchange', openInvitation);
     }, []);
     useEffect(() => {
-        const controller = new AbortController();
+        const controller = active.current || new AbortController();
+        active.current = controller;
         const load = async () => {
             if (claim && !claimAccepted.current) {
                 await readResponse(
@@ -79,30 +97,56 @@ export default function SessionGate({ children }: React.PropsWithChildren) {
                         kind: 'failed',
                         message: error instanceof Error ? error.message : 'Could not pair this device.',
                     });
+            })
+            .finally(() => {
+                if (active.current === controller) active.current = null;
             });
-        return () => controller.abort();
+        return () => {
+            controller.abort();
+            if (active.current === controller) active.current = null;
+        };
     }, [claim, attempt]);
+    const retry = () => {
+        if (active.current || (gate.kind !== 'failed' && !(gate.kind === 'ready' && gate.session.role === 'unpaired'))) return;
+        // Reserve ownership before React starts the effect, so rapid input cannot cancel/restart it.
+        active.current = new AbortController();
+        const opener = document.activeElement;
+        requestFocus.current = opener instanceof HTMLElement ? opener : null;
+        setGate(gate.kind === 'failed' ? { kind: 'retrying', message: gate.message } : { kind: 'checking' });
+        setAttempt(value => value + 1);
+    };
     if (gate.kind === 'loading') return <main aria-busy="true">Connecting to the host...</main>;
-    if (gate.kind === 'failed')
+    if (gate.kind === 'failed' || gate.kind === 'retrying')
         return (
             <main>
                 <p role="alert">{gate.message}</p>
-                <button onClick={() => setAttempt(value => value + 1)}>Try again</button>
+                <button
+                    ref={actionButton}
+                    aria-disabled={pending}
+                    aria-busy={pending}
+                    style={{ color: pending ? 'GrayText' : undefined }}
+                    onClick={retry}
+                >
+                    Try again
+                </button>
+                {pending && <p role="status">Checking this device...</p>}
             </main>
         );
-    if (gate.session.role === 'unpaired')
+    if (gate.kind === 'checking' || gate.session.role === 'unpaired')
         return (
             <main>
                 <h1>Pair this device with TIGHT</h1>
                 <p>Ask the host for a player or spectator invitation. The game code alone does not grant access.</p>
                 <button
-                    onClick={() => {
-                        setGate({ kind: 'loading' });
-                        setAttempt(value => value + 1);
-                    }}
+                    ref={actionButton}
+                    aria-disabled={pending}
+                    aria-busy={pending}
+                    style={{ color: pending ? 'GrayText' : undefined }}
+                    onClick={retry}
                 >
                     Check pairing
                 </button>
+                {pending && <p role="status">Checking this device...</p>}
             </main>
         );
     return <SessionContext.Provider value={gate.session}>{children}</SessionContext.Provider>;

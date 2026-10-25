@@ -18,6 +18,8 @@ The browser remembers a successful claim response for the current document. If r
 
 Claim failures distinguish rejected links from temporary host failures. HTTP 400/403 still request a replacement link. HTTP 429 asks the user to wait and retry, and other unsuccessful responses ask the user to check the host and retry the same link. These messages do not extend invitation expiry or retry automatically; the server still decides whether a later claim is valid.
 
+Try again and Check pairing own one request at a time. A manual action reserves its cancellation controller before the read begins; further activation is ignored until it settles. The control stays mounted, focusable, and busy while checking. Failed checks keep keyboard focus available for another attempt, including when Check pairing changes to Try again or a retry returns to the unpaired screen. Closing the document cancels its active read. Successful claims still skip repeat POSTs as described above.
+
 Opening a replacement invitation in the same tab works after a pairing error, from the unpaired screen, or while viewing another game. An invitation fragment triggers a fresh app load so the new device identity replaces the previous session and game state. The existing claim flow removes the fragment before contacting the host. Other URL fragments do not reload the app.
 
 The session module owns credential parsing, invitation consumption, and the permission matrix. The game store owns durable guest grants. HTTP adapters reject unauthorized game operations before invoking their handlers. WebSocket adapters resolve the grant for each command, check game and faction scope, and bind the subscription to that same scope. Display names and four-letter codes never establish permission.
