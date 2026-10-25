@@ -51,7 +51,10 @@ const styles: Record<string, SxProps<Theme>> = {
     },
 };
 
-const CREATE_NEW_PLAYER_VALUE = 'Create New Player';
+const NEW_PLAYER_OPTION = 'new';
+const EXISTING_PLAYER_PREFIX = 'player:';
+
+type PlayerSelection = { kind: 'new'; name: string } | { kind: 'existing'; name: string };
 
 interface PlayerNameDialogProps {
     open: boolean;
@@ -65,8 +68,10 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
     const { sendData, dispatch } = useAppContext();
     const { game, gameId, playerId } = useGameInfo();
 
-    const [isNewPlayer, setIsNewPlayer] = useState(!Boolean(playerId));
-    const [selectedPlayerId, setSelectedPlayerId] = useState(playerId ?? '');
+    const [selection, setSelection] = useState<PlayerSelection>(
+        playerId ? { kind: 'existing', name: playerId } : { kind: 'new', name: '' },
+    );
+    const selectedPlayerId = selection.name;
     const [joining, setJoining] = useState(false);
     const [joinError, setJoinError] = useState(false);
 
@@ -122,9 +127,10 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
     };
 
     const onPlayerNameChange: TextFieldProps['onChange'] = e => {
-        const newName = e.target.value;
-        setSelectedPlayerId(newName);
-        setIsNewPlayer(newName === CREATE_NEW_PLAYER_VALUE);
+        const value = e.target.value;
+        setSelection(value === NEW_PLAYER_OPTION
+            ? { kind: 'new', name: '' }
+            : { kind: 'existing', name: value.slice(EXISTING_PLAYER_PREFIX.length) });
     };
 
     return (
@@ -159,30 +165,31 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
                                 disabled={joining}
                                 select
                                 value={
-                                    game.players.includes(selectedPlayerId) ? selectedPlayerId : CREATE_NEW_PLAYER_VALUE
+                                    selection.kind === 'new' ? NEW_PLAYER_OPTION : `${EXISTING_PLAYER_PREFIX}${selection.name}`
                                 }
                                 fullWidth
                                 variant="outlined"
                                 onChange={onPlayerNameChange}
                             >
-                                <MenuItem key={CREATE_NEW_PLAYER_VALUE} value={CREATE_NEW_PLAYER_VALUE} divider>
+                                <MenuItem key={NEW_PLAYER_OPTION} value={NEW_PLAYER_OPTION} divider>
                                     Create New Player
                                 </MenuItem>
                                 {game.players.map(playerId => (
-                                    <MenuItem key={playerId} value={playerId}>
+                                    <MenuItem key={`${EXISTING_PLAYER_PREFIX}${playerId}`} value={`${EXISTING_PLAYER_PREFIX}${playerId}`}>
                                         {playerId}
                                     </MenuItem>
                                 ))}
                             </TextField>
                         </FormControl>
                     </Grid>
-                    {isNewPlayer && (
+                    {selection.kind === 'new' && (
                         <Grid item sx={styles.gridItem}>
                             <FormControl fullWidth variant="standard">
                                 <TextField
                                     color="primary"
                                     variant="outlined"
                                     label="Enter Name"
+                                    value={selection.name}
                                     inputProps={{ maxLength: MAX_PLAYER_NAME_LENGTH }}
                                     InputProps={{ readOnly: joining }}
                                     error={Boolean(selectedPlayerId) && !isPlayerName(selectedPlayerId)}
@@ -191,7 +198,7 @@ export default function PlayerNameDialog(props: PlayerNameDialogProps) {
                                             ? 'Choose a different name, up to 80 characters.'
                                             : ''
                                     }
-                                    onChange={e => setSelectedPlayerId(e.target.value)}
+                                    onChange={e => setSelection({ kind: 'new', name: e.target.value })}
                                 />
                             </FormControl>
                         </Grid>
