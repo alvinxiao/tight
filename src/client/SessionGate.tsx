@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Session, sessionSchema } from 'common/session';
 import { readResponse } from './utils/request';
 
@@ -16,6 +16,7 @@ export default function SessionGate({ children }: React.PropsWithChildren) {
     });
     const [gate, setGate] = useState<Gate>({ kind: 'loading' });
     const [attempt, setAttempt] = useState(0);
+    const claimAccepted = useRef(false);
     useEffect(() => {
         const openInvitation = () => {
             const fragment = new URLSearchParams(window.location.hash.slice(1));
@@ -28,7 +29,7 @@ export default function SessionGate({ children }: React.PropsWithChildren) {
     useEffect(() => {
         const controller = new AbortController();
         const load = async () => {
-            if (claim) {
+            if (claim && !claimAccepted.current) {
                 await readResponse(
                     `/api/session/${claim.operation}`,
                     {
@@ -43,6 +44,8 @@ export default function SessionGate({ children }: React.PropsWithChildren) {
                                 'This host link or invitation is invalid, expired, or already used. Ask the host for a new link.',
                             );
                         }
+                        // The success headers installed the cookie even if reading the body now fails.
+                        claimAccepted.current = true;
                         await response.json();
                     },
                 );

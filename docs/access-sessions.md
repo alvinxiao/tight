@@ -10,6 +10,8 @@ The host creates an invitation for one game and an approved player display name,
 
 A retry from the already-claiming device returns the same grant while the invitation is valid; replaying its link from another browser is rejected. Failed grant writes retain the unused invitation and the previous device grant.
 
+The browser remembers a successful claim response for the current document. If reading that response body or the following device-session check fails, Try again reads the session instead of submitting the invitation again. A consumed invitation receipt expires after five minutes even though its device grant remains valid. Claims that have not returned success still retry normally. Every session read remains authoritative, including after revocation.
+
 Opening a replacement invitation in the same tab works after a pairing error, from the unpaired screen, or while viewing another game. An invitation fragment triggers a fresh app load so the new device identity replaces the previous session and game state. The existing claim flow removes the fragment before contacting the host. Other URL fragments do not reload the app.
 
 The session module owns credential parsing, invitation consumption, and the permission matrix. The game store owns durable guest grants. HTTP adapters reject unauthorized game operations before invoking their handlers. WebSocket adapters resolve the grant for each command, check game and faction scope, and bind the subscription to that same scope. Display names and four-letter codes never establish permission.
@@ -46,6 +48,8 @@ A grant is persisted before a claim is acknowledged. A failed write retains the 
 Backend integration tests cover anonymous and forged credentials, one-use and expired invitations, lost-response retry, host-only HTTP operations, cross-game and cross-faction commands, read-only spectators, secret objective filtering, revocation of open sockets, failed grant writes, restart persistence, code reuse after deletion, and a recoverable version-one migration. Browser tests cover issuing a player link, using it in an independent phone-sized browser, removing its fragment, and reloading with the device cookie. These are simulated browser clients, not physical Wi-Fi qualification.
 
 Replacement-link browser tests also cover failed player/spectator pairing, an unpaired tab, and switching from a spectator in one game to a player in another. They verify fresh app state, the actual server-issued role and game, retained host-only restrictions, and identity after reload.
+
+Claim-recovery tests cover player and spectator sessions after failed session reads or malformed successful claim bodies. They verify recovery with one accepted claim, real device cookies, host-only restrictions, and reload. Separate controls retry rejected claims. Backend tests advance a test-only clock past receipt expiration and verify that the same device cookie still reads and subscribes to its game.
 
 The desktop retains its loopback listener while optional Wi-Fi sharing adds one selected private interface. Player invitations include QR codes, and the sharing dialog explains Private-network firewall access. See [Wi-Fi sharing](lan-hosting.md). Physical Windows/phone testing remains tracked in #26. The standalone server can be bound explicitly with TIGHT_HOST and uses the same authorization boundary.
 
