@@ -134,6 +134,7 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                     <Grid item sx={styles.gridItem}>
                         <FormControl fullWidth variant="standard">
                             <Button
+                                aria-label="Join"
                                 disabled={gameId.length !== 4 || joining}
                                 sx={styles.joinButton}
                                 color="primary"
@@ -150,6 +151,7 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                             <Grid item sx={styles.gridItem}>
                                 <FormControl fullWidth variant="standard">
                                     <Button
+                                        aria-label={`Rejoin "${currentGameId}"}`}
                                         disabled={joining}
                                         sx={styles.joinButton}
                                         color="primary"
@@ -164,6 +166,7 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                             <Grid item sx={styles.gridItem}>
                                 <FormControl fullWidth variant="standard">
                                     <Button
+                                        aria-label={`Rejoin "${currentGameId}" as new player`}
                                         disabled={joining}
                                         sx={styles.joinButton}
                                         color="primary"
