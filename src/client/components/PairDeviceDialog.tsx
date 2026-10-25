@@ -23,6 +23,7 @@ import { readResponse } from '../utils/request';
 import ConnectedDevices from './ConnectedDevices';
 
 const invitationSchema = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/), expiresAt: z.number() });
+type Invitation = { kind: 'empty' } | { kind: 'ready'; link: string; expiresAt: number } | { kind: 'expired' };
 export default function PairDeviceDialog({
     gameId,
     open,
@@ -44,7 +45,8 @@ export default function PairDeviceDialog({
     const [name, setName] = useState('');
     const [role, setRole] = useState<'player' | 'spectator'>('player');
     const [tableEditing, setTableEditing] = useState(false);
-    const [link, setLink] = useState('');
+    const [invitation, setInvitation] = useState<Invitation>({ kind: 'empty' });
+    const link = invitation.kind === 'ready' ? invitation.link : '';
     const [confirmRevoke, setConfirmRevoke] = useState(false);
     const [revoked, setRevoked] = useState(false);
     const [accessChanges, setAccessChanges] = useState(0);
@@ -56,10 +58,31 @@ export default function PairDeviceDialog({
         if (open && !confirmRevoke && target && document.activeElement?.contains(target)) target.focus();
     }, [open, confirmRevoke]);
     useEffect(() => {
-        setLink('');
+        setInvitation({ kind: 'empty' });
         setRevoked(false);
         setConfirmRevoke(false);
     }, [open, name, role, tableEditing, baseOrigin]);
+    useEffect(() => {
+        if (!open || invitation.kind !== 'ready') return;
+        let timer: ReturnType<typeof setTimeout>;
+        const check = () => {
+            clearTimeout(timer);
+            const remaining = invitation.expiresAt - Date.now();
+            if (remaining <= 0) {
+                setInvitation(current => current === invitation ? { kind: 'expired' } : current);
+            } else {
+                timer = setTimeout(check, remaining);
+            }
+        };
+        check();
+        window.addEventListener('focus', check);
+        document.addEventListener('visibilitychange', check);
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener('focus', check);
+            document.removeEventListener('visibilitychange', check);
+        };
+    }, [open, invitation]);
     useEffect(() => {
         setTableEditing(false);
     }, [open, name, role]);
@@ -84,7 +107,7 @@ export default function PairDeviceDialog({
                         return invitationSchema.parse(data);
                     },
                 ),
-            invitation => setLink(`${baseOrigin}/#pair=${invitation.token}`),
+            issued => setInvitation({ kind: 'ready', link: `${baseOrigin}/#pair=${issued.token}`, expiresAt: issued.expiresAt }),
         );
     const revoke = () =>
         run(
@@ -104,7 +127,7 @@ export default function PairDeviceDialog({
                 ),
             () => {
                 setConfirmRevoke(false);
-                setLink('');
+                setInvitation({ kind: 'empty' });
                 setRevoked(true);
                 setAccessChanges(value => value + 1);
             },
@@ -173,6 +196,12 @@ export default function PairDeviceDialog({
                         <Alert severity="success">
                             All paired devices have been disconnected. Create new invitations for the people who should
                             rejoin.
+                        </Alert>
+                    )}
+                    {invitation.kind === 'expired' && (
+                        <Alert severity="info">
+                            This invitation has expired. Create a new invitation for the intended device.
+                            Devices that already joined keep their access.
                         </Alert>
                     )}
                     {localOnly && native.kind === 'ready' && (
