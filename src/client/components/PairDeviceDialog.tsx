@@ -23,7 +23,7 @@ import { readResponse } from '../utils/request';
 import ConnectedDevices from './ConnectedDevices';
 
 const invitationSchema = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/), expiresAt: z.number() });
-type Invitation = { kind: 'empty' } | { kind: 'ready'; link: string; expiresAt: number } | { kind: 'expired' };
+type Invitation = { kind: 'empty' } | ({ kind: 'ready' } & z.infer<typeof invitationSchema>) | { kind: 'expired' };
 export default function PairDeviceDialog({
     gameId,
     open,
@@ -46,7 +46,7 @@ export default function PairDeviceDialog({
     const [role, setRole] = useState<'player' | 'spectator'>('player');
     const [tableEditing, setTableEditing] = useState(false);
     const [invitation, setInvitation] = useState<Invitation>({ kind: 'empty' });
-    const link = invitation.kind === 'ready' ? invitation.link : '';
+    const link = invitation.kind === 'ready' ? `${baseOrigin}/#pair=${invitation.token}` : '';
     const [confirmRevoke, setConfirmRevoke] = useState(false);
     const [revoked, setRevoked] = useState(false);
     const [accessChanges, setAccessChanges] = useState(0);
@@ -107,7 +107,7 @@ export default function PairDeviceDialog({
                         return invitationSchema.parse(data);
                     },
                 ),
-            issued => setInvitation({ kind: 'ready', link: `${baseOrigin}/#pair=${issued.token}`, expiresAt: issued.expiresAt }),
+            issued => setInvitation({ kind: 'ready', ...issued }),
         );
     const revoke = () =>
         run(
