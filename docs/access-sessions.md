@@ -16,6 +16,8 @@ A retry from the already-claiming device returns the same grant while the invita
 
 The browser remembers a successful claim response for the current document. If reading that response body or the following device-session check fails, Try again reads the session instead of submitting the invitation again. A consumed invitation receipt expires after five minutes even though its device grant remains valid. Claims that have not returned success still retry normally. Every session read remains authoritative, including after revocation.
 
+Claim failures distinguish rejected links from temporary host failures. HTTP 400/403 still request a replacement link. HTTP 429 asks the user to wait and retry, and other unsuccessful responses ask the user to check the host and retry the same link. These messages do not extend invitation expiry or retry automatically; the server still decides whether a later claim is valid.
+
 Opening a replacement invitation in the same tab works after a pairing error, from the unpaired screen, or while viewing another game. An invitation fragment triggers a fresh app load so the new device identity replaces the previous session and game state. The existing claim flow removes the fragment before contacting the host. Other URL fragments do not reload the app.
 
 The session module owns credential parsing, invitation consumption, and the permission matrix. The game store owns durable guest grants. HTTP adapters reject unauthorized game operations before invoking their handlers. WebSocket adapters resolve the grant for each command, check game and faction scope, and bind the subscription to that same scope. Display names and four-letter codes never establish permission.

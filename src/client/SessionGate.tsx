@@ -40,6 +40,10 @@ export default function SessionGate({ children }: React.PropsWithChildren) {
                     },
                     async response => {
                         if (!response.ok) {
+                            if (response.status === 429)
+                                throw new Error('Too many pairing attempts. Wait a moment and try again with this link.');
+                            if (response.status !== 400 && response.status !== 403)
+                                throw new Error('The host could not complete pairing. Check the host and try again with this link.');
                             throw new Error(
                                 'This host link or invitation is invalid, expired, or already used. Ask the host for a new link.',
                             );
