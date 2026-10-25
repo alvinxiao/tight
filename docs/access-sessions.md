@@ -10,6 +10,8 @@ The host creates an invitation for one game and an approved player display name,
 
 The host removes an expired invitation link and QR code and offers a new invitation. It checks the server's expiration timestamp on a timer and when the window regains focus or visibility, including after suspension. This display change does not revoke devices that already joined. Server checks remain authoritative.
 
+Invitation state stores the issued token and expiration, while the displayed address comes from the current hosting state. A response that arrives after a network change cannot restore the previous network address. If sharing has stopped, the link is local to this PC and no phone QR code appears. Existing displayed invitations are cleared when the network address changes.
+
 A retry from the already-claiming device returns the same grant while the invitation is valid; replaying its link from another browser is rejected. Failed grant writes retain the unused invitation and the previous device grant.
 
 The browser remembers a successful claim response for the current document. If reading that response body or the following device-session check fails, Try again reads the session instead of submitting the invitation again. A consumed invitation receipt expires after five minutes even though its device grant remains valid. Claims that have not returned success still retry normally. Every session read remains authoritative, including after revocation.
