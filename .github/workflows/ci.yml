@@ -21,7 +21,8 @@ jobs:
           - os: ubuntu-latest
             node: '22.15.0'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    # Slow OS package downloads must leave time for the browser and native gates.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
