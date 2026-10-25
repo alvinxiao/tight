@@ -53,7 +53,13 @@ export async function startBackend(options: BackendOptions) {
         const distDir = path.join(dirname, '../dist');
         const html = path.join(distDir, 'index.html');
 
-        const publicPath = express.static(distDir);
+        const publicPath = express.static(distDir, {
+            setHeaders: (res, filename) => {
+                if (/\.[a-f0-9]{20}(?:\.chunk)?\.js$/.test(filename)) {
+                    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+                }
+            },
+        });
         app.use(publicPath);
         app.use('/api', authorizeHttp(sessions));
         app.use('/api/game/import', express.json({ limit: '1mb' }));
