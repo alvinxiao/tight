@@ -8,6 +8,8 @@ WebSocket connections have bounded opening waits and five attempts. Failed hands
 
 Returning to a visible game asks the host for a full snapshot. If an open socket cannot send the request or returns no full snapshot within ten seconds, the client retires it and uses normal bounded reconnection. It does not wait for a dead close handshake. Repeated foreground events do not restart the deadline. A successful snapshot cancels it. This is client recovery using the existing protocol; it adds no heartbeat message or server-side state.
 
+Navigation, foreground resynchronization, and reads triggered by a changed game incarnation share one snapshot-send boundary. A synchronous read-send failure uses normal connection recovery instead of reporting an unsupported host reply. Reply validation still rejects malformed host data.
+
 A newly opened socket also needs a valid initial snapshot within ten seconds. The app keeps Connecting visible and does not reset its retry budget until that snapshot arrives. Repeated open-but-uninitialized connections stop after five attempts and offer Reconnect. Browser suspension can delay these timers until JavaScript resumes.
 
 Mutations use command IDs, acknowledgments after durable writes, and revision checks. Retries keep the original bytes and identity rather than repeating an action under a new ID. See [command confirmation](command-protocol.md) for retry budgets, stale edits, and uncertain outcomes. A successful WebSocket `send` alone still means only that the browser queued bytes.

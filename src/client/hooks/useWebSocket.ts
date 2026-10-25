@@ -15,6 +15,7 @@ const SNAPSHOT_TIMEOUT = 10000;
 const COMMAND_ATTEMPTS = 3;
 const MAX_PENDING = 32;
 const gameIdSchema = z.string().regex(GAME_CODE_PATTERN);
+const gameLoadSchema = z.object({ gameId: gameIdSchema, playerId: z.string().nullable().optional() }).passthrough();
 const envelopeSchema = z.object({ type: z.nativeEnum(MessageType), data: z.unknown() }).strict();
 const snapshotSchema = z
     .object({
@@ -87,6 +88,16 @@ export default function useWebSocket(options: WebSocketOptions) {
             }, SNAPSHOT_TIMEOUT),
         };
     }, []);
+    const requestSnapshot = useCallback((socket: WebSocket, data: z.infer<typeof gameLoadSchema>): boolean => {
+        waitForSnapshot(socket, data.gameId);
+        try {
+            socket.send(JSON.stringify({ type: MessageType.GAME_LOAD, data }));
+            return true;
+        } catch {
+            recoverCurrent.current?.();
+            return false;
+        }
+    }, [waitForSnapshot]);
     const failed = useCallback(() => {
         optionsRef.current.dispatch({
             type: ActionType.setConnecting,
@@ -261,13 +272,7 @@ export default function useWebSocket(options: WebSocketOptions) {
                             !snapshot.game.created &&
                             !snapshot.game.deleted
                         ) {
-                            waitForSnapshot(ws, snapshot.game.id);
-                            ws.send(
-                                JSON.stringify({
-                                    type: MessageType.GAME_LOAD,
-                                    data: { gameId: snapshot.game.id, playerId: previous.playerId },
-                                }),
-                            );
+                            requestSnapshot(ws, { gameId: snapshot.game.id, playerId: previous.playerId });
                             return;
                         }
                     }
@@ -317,7 +322,7 @@ export default function useWebSocket(options: WebSocketOptions) {
         };
         // The close handler owns retrying failures, including rejected handshakes.
         ws.onerror = () => {};
-    }, [clearTimers, failed, deliver, publish, unconfirmed, waitForSnapshot]);
+    }, [clearTimers, failed, deliver, publish, unconfirmed, waitForSnapshot, requestSnapshot]);
 
     useEffect(() => {
         active.current = true;
@@ -329,18 +334,7 @@ export default function useWebSocket(options: WebSocketOptions) {
                 const { state } = optionsRef.current;
                 if (state.game) {
                     if (snapshotWait.current?.socket === ws) return;
-                    waitForSnapshot(ws, state.game.id);
-                    try {
-                        ws.send(
-                            JSON.stringify({
-                                type: MessageType.GAME_LOAD,
-                                data: { gameId: state.game.id, playerId: state.playerId },
-                            }),
-                        );
-                    } catch {
-                        recoverCurrent.current?.();
-                        return;
-                    }
+                    if (!requestSnapshot(ws, { gameId: state.game.id, playerId: state.playerId })) return;
                 }
                 for (const entry of pending.current.values())
                     if (entry.uncertain && entry.attempts < COMMAND_ATTEMPTS) deliver(entry);
@@ -359,7 +353,7 @@ export default function useWebSocket(options: WebSocketOptions) {
             ws?.close();
             document.removeEventListener('visibilitychange', visible);
         };
-    }, [connect, clearTimers, deliver, waitForSnapshot]);
+    }, [connect, clearTimers, deliver, requestSnapshot]);
 
     useEffect(() => {
         if (!options.state.reconnect) return;
@@ -379,17 +373,7 @@ export default function useWebSocket(options: WebSocketOptions) {
                 failed();
                 return false;
             }
-            if (type === MessageType.GAME_LOAD) {
-                const target = z.object({ gameId: gameIdSchema }).passthrough().parse(data);
-                waitForSnapshot(ws, target.gameId);
-                try {
-                    ws.send(JSON.stringify({ type, data }));
-                    return true;
-                } catch {
-                    recoverCurrent.current?.();
-                    return false;
-                }
-            }
+            if (type === MessageType.GAME_LOAD) return requestSnapshot(ws, gameLoadSchema.parse(data));
             const target = z.object({ gameId: gameIdSchema }).passthrough().safeParse(data);
             const { state } = optionsRef.current;
             if (
@@ -451,7 +435,7 @@ export default function useWebSocket(options: WebSocketOptions) {
             });
             return true;
         },
-        [failed, flush, publish, waitForSnapshot],
+        [failed, flush, publish, requestSnapshot],
     );
     return { sendData };
 }
