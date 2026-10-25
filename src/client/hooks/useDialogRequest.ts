@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
 /** One pending request per dialog. Closing cancels its callbacks as well as its network read. */
-export default function useDialogRequest(open: boolean) {
+export default function useDialogRequest(open: boolean, fallbackFocus?: RefObject<HTMLElement>) {
     const active = useRef<AbortController | null>(null);
     const requestFocus = useRef<HTMLElement | null>(null);
     const [pending, setPending] = useState(false);
@@ -18,9 +18,10 @@ export default function useDialogRequest(open: boolean) {
         const opener = requestFocus.current;
         requestFocus.current = null;
         const focused = document.activeElement;
-        // Disabled submit controls can leave focus on the modal container or body.
-        if (opener?.isConnected && focused !== opener && focused?.contains(opener)) opener.focus();
-    }, [open, pending]);
+        const target = opener?.isConnected ? opener : fallbackFocus?.current;
+        // Restore only focus lost to a container, preserving another focused control.
+        if (opener && target?.isConnected && focused !== target && focused?.contains(target)) target.focus();
+    }, [open, pending, fallbackFocus]);
     useEffect(() => {
         if (!open) cancel();
         return () => {
