@@ -85,3 +85,55 @@ for (const initial of ['unpaired', 'another game']) {
         }
     });
 }
+
+test('repeated paired-page reloads reuse fingerprinted scripts without asset throttling', async ({ browser, request, baseURL }) => {
+    const created = await request.post('/api/game/create', { data: { numPlayers: 1 } });
+    expect(created.ok()).toBe(true);
+    const id = z.string().parse(await created.json());
+    const guest = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+    try {
+        const issued = await request.post('/api/session/invite', { data: { role: 'spectator', gameId: id } });
+        expect(issued.ok()).toBe(true);
+        const { token } = z.object({ token: z.string() }).parse(await issued.json());
+        const page = await guest.newPage();
+        const errors: string[] = [];
+        const throttled: string[] = [];
+        page.on('pageerror', error => errors.push(error.message));
+        page.on('response', response => {
+            if (response.status() === 429 && !new URL(response.url()).pathname.startsWith('/api/')) {
+                throttled.push(new URL(response.url()).pathname);
+            }
+        });
+        await page.goto('/#pair=' + token);
+        const rows = page.getByRole('table', { name: 'Faction assignments', exact: true }).getByRole('row');
+        await expect(rows).toHaveCount(1);
+        const scripts = await page.evaluate(() => performance.getEntriesByType('resource')
+            .filter(entry => entry instanceof PerformanceResourceTiming && entry.initiatorType === 'script')
+            .map(entry => new URL(entry.name).pathname));
+        expect(scripts.length).toBeGreaterThan(0);
+        expect(scripts.every(script => /\.[a-f0-9]{20}(?:\.chunk)?\.js$/.test(script))).toBe(true);
+        const bundle = scripts.find(script => script.includes('/bundle.'));
+        if (!bundle) throw new Error('Expected the production entry script');
+        const asset = await guest.request.get(bundle);
+        expect(asset.ok()).toBe(true);
+        expect(asset.headers()['cache-control']).toBe('public, max-age=31536000, immutable');
+        await asset.dispose();
+        const html = await guest.request.get('/');
+        expect(html.headers()['cache-control']).not.toContain('immutable');
+        await html.dispose();
+        for (let reload = 0; reload < 10; reload += 1) {
+            await page.reload();
+            await expect(page.getByText('Spectator, read only.')).toBeVisible();
+            await expect(rows).toHaveCount(1);
+        }
+        const cachedScripts = await page.evaluate(() => performance.getEntriesByType('resource')
+            .filter(entry => entry instanceof PerformanceResourceTiming && entry.initiatorType === 'script' && entry.transferSize === 0).length);
+        expect(cachedScripts).toBeGreaterThan(0);
+        expect(throttled).toEqual([]);
+        expect(errors).toEqual([]);
+        expect(sessionSchema.parse(await (await guest.request.get('/api/session')).json())).toEqual({ role: 'spectator', gameId: id });
+    } finally {
+        await guest.close();
+        await request.post('/api/game/delete', { data: { id } });
+    }
+});

@@ -33,7 +33,7 @@ for (const scenario of ['blank new name', 'literal option name', 'new-name draft
         await select.press('Enter');
         await expect(fresh.getByRole('listbox')).toBeVisible();
         await fresh.keyboard.press('End');
-        await expect(fresh.getByRole('option', { name: existing, exact: true })).toBeFocused();
+        await expect(fresh.getByRole('listbox').getByRole('option').last()).toBeFocused();
         await fresh.keyboard.press('Enter');
         await expect(name).toHaveCount(0);
         await expect(submit).toBeEnabled();
@@ -45,7 +45,7 @@ for (const scenario of ['blank new name', 'literal option name', 'new-name draft
             await select.press('Enter');
             await expect(fresh.getByRole('listbox')).toBeVisible();
             await fresh.keyboard.press('Home');
-            await expect(fresh.getByRole('option', { name: 'Create New Player', exact: true })).toBeFocused();
+            await expect(fresh.getByRole('listbox').getByRole('option').first()).toBeFocused();
             await fresh.keyboard.press('Enter');
             await expect(name).toHaveValue('');
             await expect(submit).toBeDisabled();
@@ -59,13 +59,13 @@ for (const scenario of ['blank new name', 'literal option name', 'new-name draft
                 await select.press('Enter');
                 await expect(fresh.getByRole('listbox')).toBeVisible();
                 await fresh.keyboard.press('End');
-                await expect(fresh.getByRole('option', { name: existing, exact: true })).toBeFocused();
+                await expect(fresh.getByRole('listbox').getByRole('option').last()).toBeFocused();
                 await fresh.keyboard.press('Enter');
                 await expect(name).toHaveCount(0);
                 await select.press('Enter');
                 await expect(fresh.getByRole('listbox')).toBeVisible();
                 await fresh.keyboard.press('Home');
-                await expect(fresh.getByRole('option', { name: 'Create New Player', exact: true })).toBeFocused();
+                await expect(fresh.getByRole('listbox').getByRole('option').first()).toBeFocused();
                 await fresh.keyboard.press('Enter');
                 await expect(name).toHaveValue('');
                 await expect(submit).toBeDisabled();

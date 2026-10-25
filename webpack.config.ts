@@ -58,8 +58,10 @@ if (web) {
         ...config,
         entry: path.resolve(clientDir, 'index.tsx'),
         output: {
-            filename: 'js/bundle.js',
-            chunkFilename: 'js/[name].chunk.js',
+            filename: dev ? 'js/bundle.js' : 'js/bundle.[contenthash].js',
+            chunkFilename: dev ? 'js/[name].chunk.js' : 'js/[name].[contenthash].chunk.js',
+            hashFunction: 'sha256',
+            hashDigestLength: 20,
             publicPath: '/',
             path: path.resolve(cwd, 'dist'),
         },
