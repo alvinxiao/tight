@@ -8,6 +8,8 @@ The backend creates a random host capability at startup. Electron receives it th
 
 The host creates an invitation for one game and an approved player display name, or for a spectator. Invitations expire after five minutes and can be claimed once. Claiming mints a random device capability. Only its SHA-256 digest is stored in SQLite. Player grants survive backend restarts. Pairing a replacement device for the same name revokes its previous grants. The host can revoke all devices and outstanding invitations for a game without deleting its data. Deleting a game also deletes its grants, preventing a later reused game code from inheriting permissions.
 
+The host removes an expired invitation link and QR code and offers a new invitation. It checks the server's expiration timestamp on a timer and when the window regains focus or visibility, including after suspension. This display change does not revoke devices that already joined. Server checks remain authoritative.
+
 A retry from the already-claiming device returns the same grant while the invitation is valid; replaying its link from another browser is rejected. Failed grant writes retain the unused invitation and the previous device grant.
 
 The browser remembers a successful claim response for the current document. If reading that response body or the following device-session check fails, Try again reads the session instead of submitting the invitation again. A consumed invitation receipt expires after five minutes even though its device grant remains valid. Claims that have not returned success still retry normally. Every session read remains authoritative, including after revocation.
@@ -50,6 +52,8 @@ Backend integration tests cover anonymous and forged credentials, one-use and ex
 Replacement-link browser tests also cover failed player/spectator pairing, an unpaired tab, and switching from a spectator in one game to a player in another. They verify fresh app state, the actual server-issued role and game, retained host-only restrictions, and identity after reload.
 
 Claim-recovery tests cover player and spectator sessions after failed session reads or malformed successful claim bodies. They verify recovery with one accepted claim, real device cookies, host-only restrictions, and reload. Separate controls retry rejected claims. Backend tests advance a test-only clock past receipt expiration and verify that the same device cookie still reads and subscribes to its game.
+
+Invitation-display tests cover player and spectator expiry on the timer, window focus, and visibility changes. A controlled browser clock exercises the real server-issued deadline, removal of both link and QR code, and creation and successful claiming of a replacement invitation. Only native interface enumeration is simulated to render a LAN QR code. These tests do not qualify physical sleep or Wi-Fi behavior.
 
 The desktop retains its loopback listener while optional Wi-Fi sharing adds one selected private interface. Player invitations include QR codes, and the sharing dialog explains Private-network firewall access. See [Wi-Fi sharing](lan-hosting.md). Physical Windows/phone testing remains tracked in #26. The standalone server can be bound explicitly with TIGHT_HOST and uses the same authorization boundary.
 
