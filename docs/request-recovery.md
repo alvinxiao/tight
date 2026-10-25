@@ -23,3 +23,5 @@ Browser regressions exercise HTTP errors, a stalled request, dialog cancellation
 CI browser and desktop runs use Playwright's `--fail-on-flaky-tests` policy. A test that succeeds only on retry fails the check, so the existing failure-artifact step retains its trace and diagnostic context. A green retry alone is not accepted as verification.
 
 The player-selection keyboard journey waits for the menu to be visible and its intended option to hold focus before choosing it. Its game cleanup runs in a separate teardown hook with a bounded request, preserving the original failure when a test times out.
+
+The native desktop setup journey starts renderer/network tracing before waiting for the first window. Failure diagnostics bound renderer and main-process reads independently, preserving an available window result when the renderer does not answer. A bounded trace capture is attached on failure. The startup assertion and its deadline remain unchanged; the diagnostics do not claim to fix an unexplained native startup failure.

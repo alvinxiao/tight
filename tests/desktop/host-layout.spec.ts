@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { captureDiagnostic } from '../helpers/bounded-diagnostic.js';
 
 const require = createRequire(import.meta.url);
 const root = path.resolve(import.meta.dirname, '../..');
@@ -12,6 +13,8 @@ test('the default desktop window shows all eight setup slots and actions without
     let app: ElectronApplication | undefined;
     let observedPage: Page | undefined;
     const sockets: WebSocket[] = [];
+    let tracing = false;
+    let failed = false;
     try {
         const executable: unknown = process.env.TIGHT_DESKTOP_EXECUTABLE || require('electron');
         if (typeof executable !== 'string') throw new Error('Expected Electron executable path');
@@ -24,8 +27,12 @@ test('the default desktop window shows all eight setup slots and actions without
             cwd: directory,
             env: { ...process.env, TIGHT_DATA_DIR: directory },
         });
+        const observe = (page: Page) => page.on('websocket', socket => sockets.push(socket));
+        app.context().on('page', observe);
+        app.context().pages().forEach(observe);
+        await app.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
+        tracing = true;
         const page = observedPage = await app.firstWindow();
-        page.on('websocket', socket => sockets.push(socket));
         await expect(page.getByRole('button', { name: 'Create Game', exact: true })).toBeVisible();
         const origin = new URL(page.url()).origin;
         const response = await page.request.post(`${origin}/api/game/create`, { data: { numPlayers: 8 } });
@@ -50,30 +57,36 @@ test('the default desktop window shows all eight setup slots and actions without
         await expect(page.getByRole('button', { name: 'Pair a device', exact: true })).toBeInViewport();
         await page.screenshot({ path: testInfo.outputPath('desktop-eight-player-setup.png') });
     } catch (error) {
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        try {
-            const detail = await Promise.race([
-                Promise.allSettled([
-                    observedPage?.evaluate(() => ({
-                        path: location.pathname, ready: document.readyState, visibility: document.visibilityState,
-                        body: document.body?.innerText.slice(0, 1500),
-                    })),
-                    app?.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => ({
-                        visible: window.isVisible(), minimized: window.isMinimized(),
-                        loading: window.webContents.isLoading(),
-                    }))),
-                ]),
-                new Promise(resolve => { timer = setTimeout(() => resolve('Diagnostic collection timed out'), 2000); }),
-            ]);
-            const report = JSON.stringify({ detail, observedSockets: sockets.map(socket => ({ closed: socket.isClosed() })) })
-                .replace(/[A-Za-z0-9_-]{43,}/g, '[redacted]');
-            await testInfo.attach('native-setup-failure', { body: report, contentType: 'application/json' });
-            throw new Error(`${error instanceof Error ? error.message : 'Native setup failed'}\nNative setup state: ${report}`);
-        } finally {
-            clearTimeout(timer);
-        }
+        failed = true;
+        const [renderer, windows] = await Promise.all([
+            captureDiagnostic(observedPage?.evaluate(() => ({
+                path: location.pathname, ready: document.readyState, visibility: document.visibilityState,
+                body: document.body?.innerText.slice(0, 1500),
+            })) ?? Promise.resolve(null)),
+            captureDiagnostic(app?.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => ({
+                visible: window.isVisible(), minimized: window.isMinimized(),
+                loading: window.webContents.isLoading(),
+                path: new URL(window.webContents.getURL() || 'about:blank').pathname,
+            }))) ?? Promise.resolve(null)),
+        ]);
+        const report = JSON.stringify({
+            renderer, windows, pageClosed: observedPage?.isClosed(),
+            path: observedPage ? new URL(observedPage.url() || 'about:blank').pathname : null,
+            observedSockets: sockets.map(socket => ({ closed: socket.isClosed() })),
+        }).replace(/[A-Za-z0-9_-]{43,}/g, '[redacted]');
+        await testInfo.attach('native-setup-failure', { body: report, contentType: 'application/json' });
+        throw new Error(`${error instanceof Error ? error.message : 'Native setup failed'}\nNative setup state: ${report}`);
     } finally {
         if (app) {
+            if (tracing) {
+                const tracePath = testInfo.outputPath('native-renderer-trace.zip');
+                const trace = await captureDiagnostic(app.context().tracing.stop(failed ? { path: tracePath } : {}));
+                if (failed && trace.status === 'fulfilled') {
+                    await testInfo.attach('native-renderer-trace', { path: tracePath, contentType: 'application/zip' });
+                } else if (failed) {
+                    await testInfo.attach('native-trace-capture', { body: JSON.stringify(trace), contentType: 'application/json' });
+                }
+            }
             await app.evaluate(async ({ dialog, app }) => {
                 dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
                 app.quit();
