@@ -544,3 +544,33 @@ test('only the host can see game-scoped connected devices, deduplicated across t
     await f.admin('game/delete', { id });
     assert.equal((await f.admin(route)).status, 404);
 });
+
+for (const role of ['player', 'spectator']) {
+    test(`an expired ${role} claim receipt does not expire its durable device session`, async t => {
+        const actualNow = Date.now;
+        let now = actualNow();
+        Date.now = () => now;
+        try {
+            const f = await fixture(t);
+            const created = await f.admin('game/create', { numPlayers: 1 });
+            assert.equal(created.status, 200);
+            const gameId = await created.json();
+            const expected = role === 'player' ? { role, gameId, playerId: 'Patient phone' } : { role, gameId };
+            const invitation = await f.admin('session/invite', expected);
+            assert.equal(invitation.status, 200);
+            const { token } = await invitation.json();
+            const claimed = await f.request('session/claim', '', { token });
+            assert.equal(claimed.status, 200);
+            const cookie = claimed.headers.get('set-cookie').split(';')[0];
+            now += 5 * 60 * 1000 + 1;
+            assert.equal((await f.request('session/claim', cookie, { token })).status, 403);
+            const current = await f.request('session', cookie);
+            assert.equal(current.status, 200);
+            assert.deepEqual(await current.json(), expected);
+            const { initial } = await f.connect(cookie, gameId);
+            assert.equal(initial.game.id, gameId);
+        } finally {
+            Date.now = actualNow;
+        }
+    });
+}
