@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { z } from 'zod';
 import { sessionSchema } from '../../src/common/session.js';
+import { test as isolatedTest } from '../helpers/isolated-browser-host.js';
 
 for (const role of ['player', 'spectator']) {
     test(`a replacement ${role} invitation works in the same failed-pairing tab`, async ({ browser, request, baseURL }) => {
@@ -86,7 +87,7 @@ for (const initial of ['unpaired', 'another game']) {
     });
 }
 
-test('repeated paired-page reloads reuse fingerprinted scripts without asset throttling', async ({ browser, request, baseURL }) => {
+isolatedTest('repeated paired-page reloads reuse fingerprinted scripts without asset throttling', async ({ browser, request, baseURL }) => {
     const created = await request.post('/api/game/create', { data: { numPlayers: 1 } });
     expect(created.ok()).toBe(true);
     const id = z.string().parse(await created.json());

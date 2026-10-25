@@ -1,5 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
 import { z } from 'zod';
+import { test } from '../helpers/isolated-browser-host.js';
 
 for (const role of ['player', 'spectator'] as const) {
     for (const recovery of ['timer', 'focus', 'visibility'] as const) {
