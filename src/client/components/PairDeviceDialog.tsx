@@ -34,6 +34,8 @@ export default function PairDeviceDialog({
 }) {
     const selectId = useId();
     const closeButton = useRef<HTMLButtonElement>(null);
+    const disconnectButton = useRef<HTMLButtonElement>(null);
+    const restoreDisconnectFocus = useRef(false);
     const { state: native } = useNativeHosting();
     const sharingOrigin = native.kind === 'ready' ? lanOrigin(native.value) : null;
     const baseOrigin = sharingOrigin || window.location.origin;
@@ -47,6 +49,12 @@ export default function PairDeviceDialog({
     const [revoked, setRevoked] = useState(false);
     const [accessChanges, setAccessChanges] = useState(0);
     const { pending, error, run, cancel } = useDialogRequest(open, closeButton);
+    useEffect(() => {
+        if (!restoreDisconnectFocus.current) return;
+        restoreDisconnectFocus.current = false;
+        const target = disconnectButton.current;
+        if (open && !confirmRevoke && target && document.activeElement?.contains(target)) target.focus();
+    }, [open, confirmRevoke]);
     useEffect(() => {
         setLink('');
         setRevoked(false);
@@ -205,7 +213,10 @@ export default function PairDeviceDialog({
                         <Alert severity="warning">
                             Disconnect every paired player and spectator and cancel unused invitations? Saved games
                             remain on this PC.
-                            <Button disabled={pending} onClick={() => setConfirmRevoke(false)}>
+                            <Button disabled={pending} onClick={() => {
+                                restoreDisconnectFocus.current = true;
+                                setConfirmRevoke(false);
+                            }}>
                                 Keep devices connected
                             </Button>
                             <Button color="error" disabled={pending} onClick={revoke}>
@@ -213,7 +224,7 @@ export default function PairDeviceDialog({
                             </Button>
                         </Alert>
                     ) : (
-                        <Button color="error" disabled={pending} onClick={() => setConfirmRevoke(true)}>
+                        <Button ref={disconnectButton} color="error" disabled={pending} onClick={() => setConfirmRevoke(true)}>
                             Disconnect paired devices
                         </Button>
                     )}
