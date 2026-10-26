@@ -118,13 +118,6 @@ export default function GameWrapper(props: GameWrapperProps): ReactElement {
         }
     }, [game, gameId, gameIdParam, isStatusPage]);
 
-    // If path is just the game ID, redirect to main status page.
-    useEffect(() => {
-        if (gameId && pathnameLowerCase === `/${gameId.toLowerCase()}`) {
-            navigate(`/${gameId}/status`);
-        }
-    }, [pathname]);
-
     if (catalogError || (gameIdToLoad && loadError)) {
         return (
             <Grid container direction="column" alignItems="center" sx={{ p: 3 }}>

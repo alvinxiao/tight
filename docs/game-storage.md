@@ -60,3 +60,5 @@ The browser keeps game, display-name, and theme hints in tab storage when it is 
 The fallback lasts only until the document closes or reloads. A host may need to choose its existing display name again and select a theme after reload. Player and spectator identity is restored from the valid device cookie and server grant. A failed hint removal cannot restore an old hint during the current document's lifetime. Native tab persistence continues normally when available.
 
 Stored tab hints are parsed when read. Unsupported game codes, invalid display names, and unknown themes are ignored before they reach app state or a connection query. Valid hints retain their normal behavior. This does not change saved games, device credentials, or server permission checks.
+
+A bare game address redirects to its status route before the game view loads. Saved-library Resume uses that same route boundary whether tab hints already restored a game or the host must select its existing player. The redirect does not wait for WebSocket game state, and invalid game-code addresses still show route recovery.

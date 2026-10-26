@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Route, Routes, useParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 
 import loadable, { LoadableComponent } from '@loadable/component';
 
@@ -23,6 +23,11 @@ function ValidatedGamePage({ Page }: GameWrapperProps) {
     return gameId && !isGameCode(gameId) ? <NotFound /> : <GameWrapper Page={Page} />;
 }
 
+function GameRedirect() {
+    const { gameId } = useParams();
+    return gameId && isGameCode(gameId) ? <Navigate to={`/${gameId}/status`} replace /> : <NotFound />;
+}
+
 function renderGamePage(page: LoadableComponent<any>) {
     return <ValidatedGamePage Page={page} />;
 }
@@ -37,7 +42,7 @@ function Router() {
                 <Route path="/factions" element={renderGamePage(Factions)} />
                 <Route path="/strategy-cards" element={renderGamePage(StrategyCards)} />
 
-                <Route path="/:gameId" element={renderGamePage(Game)} />
+                <Route path="/:gameId" element={<GameRedirect />} />
                 <Route path="/:gameId/status" element={renderGamePage(Game)} />
                 <Route path="/:gameId/players" element={renderGamePage(Players)} />
                 <Route path="/:gameId/results" element={renderGamePage(GameResults)} />
