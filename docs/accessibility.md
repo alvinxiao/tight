@@ -31,3 +31,5 @@ Player selection tracks new-name entry separately from an existing identity. Cho
 The expanded faction reference labels its read-only Commodities field. Browser regressions open the reference with keyboard activation, check its named value, and scan the expanded page at phone width in both themes. These rendered-state scans do not replace reference-page assistive-technology qualification.
 
 Faction-reference bulk controls track the section indices, excluding TypeScript enum reverse-map names. Keyboard regressions expand every section individually and collapse them individually after Expand, then verify the opposite bulk action still works.
+
+Faction-reference Next and Previous navigation recover focus on the same directional control after loading. A failed read focuses Retry loading information, then returns to the directional control when retry succeeds. Recovery preserves focus deliberately moved elsewhere. Browser journeys hold real faction reads to check success, failure and retry, and deliberate focus changes in both directions.
