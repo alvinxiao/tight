@@ -30,7 +30,7 @@ Use `passed`, `failed`, `blocked`, or `untested`. Each result needs observed beh
 | Scenario | Status | Observed behavior and evidence reference |
 | --- | --- | --- |
 | Clean standard-user install and Start menu launch | untested | |
-| Spaces and Unicode in install path | untested | |
+| Spaces and Unicode in the account profile and per-user install path | untested | |
 | Native SmartScreen and publisher prompts | untested | |
 | Double launch focuses the existing host | untested | |
 | Local-only default and selected private adapter | untested | |

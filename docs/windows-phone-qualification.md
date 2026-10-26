@@ -26,7 +26,7 @@ For a signed candidate, compare the publisher with the intended release identity
 ## Install and establish a baseline
 
 1. Install as the standard user. Record every prompt and whether elevation was requested. Verify the Start menu shortcut opens TIGHT without a console or developer tools.
-2. Repeat with a writable install path containing spaces and non-ASCII characters. Record the actual path privately.
+2. The installer fixes its per-user destination and does not offer a custom folder. To check spaces and non-ASCII paths, repeat in a clean test account whose actual profile path contains those characters. Record the resulting install path privately.
 3. Open TIGHT twice. Verify the second launch focuses the existing window and does not create a second host.
 4. Create a game with at least two player slots. Record its settings and the saved-game name privately.
 5. Export the game. Retain the export as the baseline for later recovery checks.
