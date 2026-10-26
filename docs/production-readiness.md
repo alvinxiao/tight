@@ -2,7 +2,7 @@
 
 Target: Windows desktop host, with phones and browsers joining on the same Wi-Fi. No accounts, internet hosting, router port forwarding, or cloud subscription are required for this first release.
 
-Reviewed commit: `d23ae0ca997174667780730f112d00b92b9ab917`. This records the baseline audit and acceptance criteria. Implementation is tracked in `readiness-issues.json` and the linked GitHub issues. An Electron installer has not been implemented or tested.
+Reviewed commit: `d23ae0ca997174667780730f112d00b92b9ab917`. This records the baseline audit and acceptance criteria. Implementation is tracked in `readiness-issues.json` and the linked GitHub issues. That baseline predates the current unsigned Electron installer and its CI lifecycle checks. See the [README](../README.md) for current behavior and limitations, and the [Windows and phone qualification procedure](windows-phone-qualification.md) for the remaining physical release gate. The findings below retain their original audit wording.
 
 Recommendation: fix the data-loss and trust-boundary problems before distributing a desktop build. Reuse the React interface and Node server inside Electron. Give one backend sole ownership of game state, durable storage, command validation, and permissions. Packaging alone does not fix the defects below.
 
