@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { sessionHints } from './utils/sessionHints';
 import { Session, sessionSchema } from 'common/session';
 import { readResponse } from './utils/request';
 
@@ -83,9 +84,9 @@ export default function SessionGate({ children }: React.PropsWithChildren) {
             .then(session => {
                 if (controller.signal.aborted) return;
                 if (session.role === 'player' || session.role === 'spectator') {
-                    sessionStorage.setItem('gameId', session.gameId);
-                    if (session.role === 'player') sessionStorage.setItem('playerId', session.playerId);
-                    else sessionStorage.removeItem('playerId');
+                    sessionHints.setItem('gameId', session.gameId);
+                    if (session.role === 'player') sessionHints.setItem('playerId', session.playerId);
+                    else sessionHints.removeItem('playerId');
                     if (claim || window.location.pathname === '/')
                         history.replaceState(null, '', `/${session.gameId}/status`);
                 }
