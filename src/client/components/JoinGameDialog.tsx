@@ -76,6 +76,7 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
     const onJoinClick = (e: React.SyntheticEvent, id: string) => {
         e.preventDefault();
         e.stopPropagation();
+        if (joining) return;
 
         if (!isGameCode(id)) {
             setInvalid(true);
@@ -119,7 +120,8 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                 {missingRejoin && <Alert severity="warning" sx={{ mb: 2 }}>
                     Game {missingRejoin} is no longer available. Enter another game code.
                 </Alert>}
-                <Grid container direction="column" justifyContent="center" alignItems="center" spacing={2}>
+                <Grid component="form" onSubmit={e => onJoinClick(e, gameId)}
+                    container direction="column" justifyContent="center" alignItems="center" spacing={2}>
                     <Grid item sx={styles.gridItem}>
                         <FormControl fullWidth variant="standard">
                             <TextField
@@ -143,13 +145,13 @@ export default function JoinGameDialog(props: JoinGameDialogProps) {
                     <Grid item sx={styles.gridItem}>
                         <FormControl fullWidth variant="standard">
                             <Button
+                                type="submit"
                                 aria-label="Join"
                                 disabled={gameId.length !== 4 || joining}
                                 sx={styles.joinButton}
                                 color="primary"
                                 variant="contained"
                                 size="large"
-                                onClick={e => onJoinClick(e, gameId)}
                             >
                                 {joining ? <CircularProgress aria-label="Joining game" size={24} /> : 'Join'}
                             </Button>
