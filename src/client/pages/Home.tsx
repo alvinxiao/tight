@@ -16,6 +16,7 @@ import {
     DialogContent,
     DialogContentText,
     DialogTitle,
+    MenuItem,
     Stack,
     Typography,
 } from '@mui/material';
@@ -32,6 +33,7 @@ function Home() {
     const session = useSession();
     const importInput = useRef<HTMLInputElement>(null);
     const renameInput = useRef<HTMLInputElement>(null);
+    const searchInput = useRef<HTMLInputElement>(null);
     const libraryHeading = useRef<HTMLHeadingElement>(null);
     const actionFocus = useRef<HTMLElement | null>(null);
     const [openCreateDialog, setOpenCreateDialog] = useState(false);
@@ -40,6 +42,8 @@ function Home() {
     const [notice, setNotice] = useState<Notice>(null);
     const [busy, setBusy] = useState(false);
     const [showArchived, setShowArchived] = useState(false);
+    const [search, setSearch] = useState('');
+    const [sort, setSort] = useState<'recent' | 'name'>('recent');
     const [rename, setRename] = useState<{ id: string; name: string } | null>(null);
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [dialogPresent, setDialogPresent] = useState(false);
@@ -101,7 +105,15 @@ function Home() {
         }
     }
 
-    const visibleGames = saved.kind === 'ready' ? saved.games.filter(game => showArchived || !game.archived) : [];
+    const query = search.trim().toLowerCase();
+    const visibleGames = saved.kind === 'ready' ? saved.games.filter(game =>
+        (showArchived || !game.archived) &&
+        (game.id.toLowerCase().includes(query) || (game.name || '').toLowerCase().includes(query)),
+    ) : [];
+    // Filtering creates a view-owned array; keep the host's last-played order by default.
+    if (sort === 'name') visibleGames.sort((a, b) =>
+        (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' }) || a.id.localeCompare(b.id),
+    );
 
     if (session.role === 'player' || session.role === 'spectator') return <Container sx={{ py: 4 }}>
         <Typography>You are paired with game {session.gameId} as {session.role === 'player' ? session.playerId : 'a spectator'}.</Typography>
@@ -156,12 +168,44 @@ function Home() {
                         }}
                     />
                 </Stack>
+                {saved.kind === 'ready' && saved.games.length > 0 && (
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ my: 2 }}>
+                        <TextField
+                            inputRef={searchInput}
+                            type="search"
+                            label="Search saved games"
+                            helperText="Search by name or game code."
+                            value={search}
+                            onChange={event => setSearch(event.target.value)}
+                            fullWidth
+                        />
+                        <TextField
+                            select
+                            label="Sort saved games"
+                            value={sort}
+                            onChange={event => {
+                                const value = event.target.value;
+                                if (value === 'recent' || value === 'name') setSort(value);
+                            }}
+                            sx={{ minWidth: 180 }}
+                        >
+                            <MenuItem value="recent">Last played</MenuItem>
+                            <MenuItem value="name">Name</MenuItem>
+                        </TextField>
+                        {search.length > 0 && <Button onClick={() => {
+                            setSearch('');
+                            searchInput.current?.focus();
+                        }} sx={{ flexShrink: 0 }}>Clear search</Button>}
+                    </Stack>
+                )}
                 <FormControlLabel
                     control={<Checkbox checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />}
                     label="Show archived games"
                 />
                 {saved.kind === 'ready' && saved.games.length > 0 && visibleGames.length === 0 && (
-                    <Typography>No active saved games. Turn on Show archived games to restore one.</Typography>
+                    <Typography role="status">{query
+                        ? 'No saved games match your search.'
+                        : 'No active saved games. Turn on Show archived games to restore one.'}</Typography>
                 )}
                 {notice && (
                     <Alert severity={notice.severity} sx={{ mb: 2 }}>

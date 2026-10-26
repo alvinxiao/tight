@@ -56,7 +56,7 @@ Device grants persist across backend restarts while the browser retains its cook
 
 ## Saved games and recovery
 
-The home screen supports resume, rename, archive/restore, export/import, and confirmed deletion. Archived games remain playable and retain their paired devices. **Show archived games** reveals them. Games do not expire after inactivity.
+The home screen supports resume, rename, archive/restore, export/import, and confirmed deletion. Archived games remain playable and retain their paired devices. **Show archived games** reveals them. Search saved games by name or code, sort by Last played or Name, and use Clear search to restore the list. Search and sorting stay local to the current home screen and do not change saves. Games do not expire after inactivity.
 
 Windows saves live in `%LOCALAPPDATA%\TIGHT\games.sqlite`, outside the installation folder. Uninstalling preserves saves and the browser profile. `TIGHT_DATA_DIR` overrides game storage. Only one backend can own a data directory at a time.
 
