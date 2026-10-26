@@ -1,14 +1,16 @@
 # Windows desktop host design
 
-A user installs TIGHT, opens it from Start Menu, selects Host game, and scans the displayed QR code with a phone. The phone opens its normal browser. The PC stores the game and continues hosting until the user ends the session. Resume game restores a saved game after restarting the PC.
+The Windows Electron app owns a bundled backend and opens the saved-game home screen. The host creates or resumes a game, enables Wi-Fi sharing on a selected adapter, and issues a player or spectator invitation. A phone scans the invitation QR code and joins in its browser. The PC stores committed changes and must stay awake while hosting.
 
-The first Electron launcher and portable Windows packaging are implemented. See [the desktop preview](windows-desktop.md) for the implemented flow and its validation limits. Private-network selection and QR invitations are also implemented; see [Wi-Fi sharing](lan-hosting.md). An installer, signing, and the remaining release work below are still planned.
+Electron, portable Windows packaging, and an unsigned per-user installer are implemented. See [the desktop preview](windows-desktop.md), [Windows installer](windows-installer.md), and [Wi-Fi sharing](lan-hosting.md) for the current behavior and verification limits. Publisher signing, distribution-rights review, and physical Windows and phone qualification remain release gates.
+
+This document explains the architecture and records the original option comparison. The module map and TypeScript signatures below are design sketches. The linked implementation guides and [README](../README.md) describe the current app.
 
 ## What exists today
 
 The React UI calls same-origin HTTP APIs and maintains a WebSocket for state updates. Express serves the production UI and API. The WebSocket handler mutates a cached game map, and a 300 ms timer broadcasts dirty portions to subscribed clients. The backend now commits games to a per-user SQLite store before success or broadcast. The short game code locates a game on one particular backend; it does not locate a host PC across a network.
 
-The useful existing split is client/server/common. Keep it. Introduce clear ownership inside those boundaries before adding the desktop runtime.
+The implementation retains the client/server/common split. Electron owns the native lifecycle, while the backend owns sessions, game commands, and SQLite writes.
 
 ## Compare the viable options
 
@@ -18,7 +20,7 @@ The useful existing split is client/server/common. Keep it. Introduce clear owne
 | Tauri with a Node sidecar | Reuses React and can provide a smaller webview shell. | Existing server still needs a bundled Node sidecar or a backend rewrite. Adds Rust/native build and WebView2 compatibility work. Measure the whole artifact, not only the shell. | Reconsider if download size becomes a demonstrated problem. |
 | Browser/PWA plus separately installed local host service | Reuses the web app and can simplify the guest experience. | A PWA alone cannot launch the existing Node server or act as its persistent LAN host. Nontechnical users still need a service installer and lifecycle UI. | Good guest interface, insufficient alone for the requested host experience. |
 
-These are design comparisons based on the inspected code, not measured installer prototypes. Prototype the Electron startup/hosting path first, and measure an actual Windows artifact before making size or memory claims.
+This original comparison led to the Electron implementation. CI now exercises native startup, the packaged Windows executable, and the unsigned installer lifecycle. Those checks do not establish download size, memory consumption, or physical-device qualification.
 
 ## Ownership and module map
 
@@ -71,16 +73,16 @@ Backend lifecycle exposes `startBackend`, `stopBackend`, and a readiness result 
 
 The command entry point accepts the authenticated session, command ID, expected revision, and parsed command. It checks authorization and game invariants, commits a transaction, returns an acknowledgment, and publishes the committed update. A stored command result prevents retries from applying the same operation twice. On reconnect, return the current snapshot and revision before accepting further edits.
 
-Session identity is an opaque credential, separate from a player's display name. Joining with a short code identifies the requested game. Pairing or host approval gives a device its allowed session. Decide explicit permissions for host, player, and spectator rather than treating a hidden UI button as access control.
+Session identity is an opaque credential, separate from a player's display name. A short code locates a game and does not grant access. Host-issued one-use invitations establish player or spectator sessions. The backend enforces host administration, player ownership, spectator read-only access, and optional host-approved table editing. See [access sessions](access-sessions.md) for the permission contract.
 
 ## Startup and hosting flow
 
 1. Windows starts Electron main. A second launch focuses the existing instance.
 2. Main locates the per-user data directory and starts the bundled backend. The backend opens storage, runs safe migrations, and binds an available nonprivileged port.
 3. Backend reports readiness and its exact origin. Main then loads the local UI with a secure BrowserWindow configuration. No production watcher or inspector starts.
-4. A new installation opens a local-only home screen with Host game and Resume game. It explains that phones need the same Wi-Fi and the PC must stay on.
+4. A new installation opens a local-only home screen with Create Game, Join Game, and Saved games. Resume opens a saved game. Phones need the same Wi-Fi and the PC must stay awake.
 5. Host on Wi-Fi explicitly enables LAN access on the selected usable interface. Show the Windows Private-network firewall prompt/guidance when needed. The additional listener preserves the local client connection; startup never quietly exposes the host.
-6. The lobby displays a join URL containing the LAN address, actual port, and game location, plus a QR code and short code. Use a separate one-time pairing flow if capabilities are conveyed through the link. Do not embed a reusable host-admin credential in the QR code.
+6. Pair device issues a one-use player or spectator invitation. Its URL and QR code use the selected LAN address and actual port. The invitation never contains the reusable host credential. Expired links require a replacement invitation.
 7. Phones load the same web UI and connect to the same backend origin. Server validates their session and allowed actions.
 8. Accepted changes commit to SQLite before acknowledgment. The UI shows saved status. Guests can resume after a transient disconnect using their device session and a fresh snapshot.
 
@@ -102,4 +104,4 @@ Use a maintained Windows packager with native Windows CI. Start with Windows x64
 
 A beta can update through a manually downloaded signed installer. Automatic updates require verified artifacts, safe migration, and a host-controlled restart point so an active game is not interrupted. Offline startup and play must work independently of the update server.
 
-The largest remaining assumptions are the exact guest permission policy, supported Windows versions, signing/publisher setup, and how much game-rule enforcement the table wants. They do not block the current backlog. Choose the smallest usable host flow and validate it on actual Windows and phone devices before expanding to internet hosting, macOS, or accounts.
+Windows 11 x64 is the qualification target. Publisher credentials, completed distribution-rights review, clean standard-user Windows testing, real Android and iOS phones, firewall behavior, sleep and reboot recovery, extended play, and manual accessibility review remain open. Automated CI does not close these gates. TIGHT also does not enforce every game rule or prerequisite. See the [remaining release limitations](../README.md#remaining-release-limitations) and issues #23, #24, and #26.
