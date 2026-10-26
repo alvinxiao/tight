@@ -7,12 +7,14 @@ import { makeStyles } from '@mui/styles';
 
 
 import FactionInfo, { FactionAccordionIndex, FactionInfoProps } from '../components/FactionInfo';
-import FactionSelect from '../components/FactionSelect';
+import FactionSelect, { FactionSelectSource } from '../components/FactionSelect';
 import api from '../utils/api';
 import useRemoteData from '../hooks/useRemoteData';
 import LoadFailure from '../components/LoadFailure';
 
 import { HEADER_HEIGHT } from '../constants';
+
+type ReferenceControl = 'previous' | 'next' | FactionSelectSource;
 
 // Numeric enum values identify sections; reverse-map names are not additional sections.
 const COUNT = Object.values(FactionAccordionIndex).filter(value => typeof value === 'number').length;
@@ -31,7 +33,10 @@ function Factions() {
     const classes = useStyles();
 
     const [selectedName, setSelectedName] = useState('');
-    const navigationFocus = useRef<'previous' | 'next' | null>(null);
+    const focusOrigin = useRef<ReferenceControl | null>(null);
+    // MUI Select exposes a focus handle, not its display element.
+    const selectionInput = useRef<Pick<HTMLElement, 'focus'>>(null);
+    const randomButton = useRef<HTMLButtonElement>(null);
     const previousButton = useRef<HTMLButtonElement>(null);
     const nextButton = useRef<HTMLButtonElement>(null);
     const retryButton = useRef<HTMLButtonElement>(null);
@@ -44,13 +49,19 @@ function Factions() {
     }, [selectedName]);
     const { resource, retry } = useRemoteData(load);
     useEffect(() => {
-        const direction = navigationFocus.current;
-        if (!direction || resource.kind === 'loading') return;
-        const target = resource.kind === 'error' ? retryButton.current
-            : direction === 'previous' ? previousButton.current : nextButton.current;
-        // Loading removes the toolbar. Recover only focus lost to a container.
-        if (target && document.activeElement !== target && document.activeElement?.contains(target)) target.focus();
-        if (resource.kind === 'loaded') navigationFocus.current = null;
+        const origin = focusOrigin.current;
+        if (!origin || resource.kind === 'loading') return;
+        const controls = {
+            previous: previousButton.current,
+            next: nextButton.current,
+            selection: selectionInput.current,
+            random: randomButton.current,
+        };
+        const target = resource.kind === 'error' ? retryButton.current : controls[origin];
+        // Loading removes the toolbar. Preserve focus deliberately moved elsewhere.
+        const focused = document.activeElement;
+        if (target && (focused === document.body || focused === document.documentElement)) target.focus();
+        if (resource.kind === 'loaded') focusOrigin.current = null;
     }, [resource]);
     const pending = resource.kind === 'loading';
     const factionInfo = resource.kind === 'loaded' ? resource.data.faction : null;
@@ -67,8 +78,8 @@ function Factions() {
 
     if (resource.kind === 'error') return <LoadFailure retry={retry} buttonRef={retryButton} />;
     if (pending) return <CircularProgress aria-label="Loading factions" />;
-    const onFactionChange = (name: string, direction: 'previous' | 'next' | null = null) => {
-        navigationFocus.current = direction;
+    const onFactionChange = (name: string, origin: ReferenceControl | null) => {
+        focusOrigin.current = origin;
         setSelectedName(name);
     };
 
@@ -89,6 +100,8 @@ function Factions() {
                         </IconButton>
                     </Tooltip>
                     <FactionSelect
+                        inputRef={selectionInput}
+                        randomizeRef={randomButton}
                         fullWidth
                         factionNames={factionNames}
                         value={displayName}
