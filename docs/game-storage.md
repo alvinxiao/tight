@@ -52,6 +52,7 @@ Names, archive status, and the last-played timestamp belong to this host’s lib
 Database version 4 introduced these fields. Migration to version 5 preserves them and validates them before changing the database. Existing games begin unnamed and unarchived, with their creation time as the initial last-played value because older versions did not record it. Invalid persisted metadata stops startup while preserving the database.
 
 Keeping these fields in game snapshots would change live revisions for library-only actions and alter portable exports. A separate JSON sidecar would lose SQLite’s write and backup guarantees. Columns on the existing game row keep creation, updates, deletion, and backups consistent without an additional synchronization step.
+
 ## Optional browser tab hints
 
 The browser keeps game, display-name, and theme hints in tab storage when it is available. Those hints are separate from the host's SQLite saves and the device credential cookie. If a browser denies tab-storage access or an operation fails, the current document keeps hints in memory instead. Pairing, game reads, and state updates still use the host's authoritative session and data.
