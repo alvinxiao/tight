@@ -76,7 +76,11 @@ function Factions() {
         setExpanded(newExpanded);
     };
 
-    if (resource.kind === 'error') return <LoadFailure retry={retry} buttonRef={retryButton} />;
+    const retryLoad = () => {
+        if (!focusOrigin.current && document.activeElement === retryButton.current) focusOrigin.current = 'selection';
+        retry();
+    };
+    if (resource.kind === 'error') return <LoadFailure retry={retryLoad} buttonRef={retryButton} />;
     if (pending) return <CircularProgress aria-label="Loading factions" />;
     const onFactionChange = (name: string, origin: ReferenceControl | null) => {
         focusOrigin.current = origin;
