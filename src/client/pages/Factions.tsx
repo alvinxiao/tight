@@ -14,8 +14,8 @@ import LoadFailure from '../components/LoadFailure';
 
 import { HEADER_HEIGHT } from '../constants';
 
-// Num accordions
-const COUNT = Object.keys(FactionAccordionIndex).length;
+// Numeric enum values identify sections; reverse-map names are not additional sections.
+const COUNT = Object.values(FactionAccordionIndex).filter(value => typeof value === 'number').length;
 
 const useStyles = makeStyles(theme => ({
     appBar: {
