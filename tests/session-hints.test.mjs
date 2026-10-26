@@ -3,9 +3,18 @@ import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 
-const source = await readFile(new URL('../src/client/utils/sessionHints.ts', import.meta.url), 'utf8');
-const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { createSessionHints } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+function compile(source) {
+    return ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+}
+function moduleUrl(source) {
+    return `data:text/javascript;base64,${Buffer.from(compile(source)).toString('base64')}`;
+}
+let source = await readFile(new URL('../src/client/utils/sessionHints.ts', import.meta.url), 'utf8');
+for (const name of ['gameCode', 'playerName']) {
+    const dependency = await readFile(new URL(`../src/common/${name}.ts`, import.meta.url), 'utf8');
+    source = source.replaceAll(`'common/${name}'`, JSON.stringify(moduleUrl(dependency)));
+}
+const { createSessionHints } = await import(moduleUrl(source));
 
 function backing() {
     const values = new Map();
@@ -61,4 +70,41 @@ test('a failed removal cannot resurrect a stale player hint in the current docum
     hints.removeItem('playerId');
     assert.equal(storage.values.get('playerId'), 'Earlier player');
     assert.equal(hints.getItem('playerId'), null);
+});
+
+test('stored game hints use the shared game-code contract', () => {
+    const storage = backing();
+    const hints = createSessionHints(() => storage);
+    for (const value of ['../not-a-game', 'abcd', 'ABCDE', '']) {
+        storage.values.set('gameId', value);
+        assert.equal(hints.getItem('gameId'), null);
+    }
+    storage.values.set('gameId', 'ABCD');
+    assert.equal(hints.getItem('gameId'), 'ABCD');
+});
+
+test('stored player hints reject reserved, blank, and oversized names while retaining valid names', () => {
+    const storage = backing();
+    const hints = createSessionHints(() => storage);
+    for (const value of ['constructor', '__proto__', 'prototype', '   ', 'X'.repeat(81), '']) {
+        storage.values.set('playerId', value);
+        assert.equal(hints.getItem('playerId'), null);
+    }
+    for (const value of ['Saved host', 'X'.repeat(80), ' Name with spaces ']) {
+        storage.values.set('playerId', value);
+        assert.equal(hints.getItem('playerId'), value);
+    }
+});
+
+test('stored theme hints accept only the supported choices and cannot revive an invalid cached value', () => {
+    const storage = backing();
+    const hints = createSessionHints(() => storage);
+    for (const value of ['light', 'dark']) {
+        storage.values.set('theme', value);
+        assert.equal(hints.getItem('theme'), value);
+    }
+    storage.values.set('theme', 'system');
+    assert.equal(hints.getItem('theme'), null);
+    storage.getItem = () => { throw new Error('Reads denied'); };
+    assert.equal(hints.getItem('theme'), null);
 });
