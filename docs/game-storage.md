@@ -58,3 +58,5 @@ Keeping these fields in game snapshots would change live revisions for library-o
 The browser keeps game, display-name, and theme hints in tab storage when it is available. Those hints are separate from the host's SQLite saves and the device credential cookie. If a browser denies tab-storage access or an operation fails, the current document keeps hints in memory instead. Pairing, game reads, and state updates still use the host's authoritative session and data.
 
 The fallback lasts only until the document closes or reloads. A host may need to choose its existing display name again and select a theme after reload. Player and spectator identity is restored from the valid device cookie and server grant. A failed hint removal cannot restore an old hint during the current document's lifetime. Native tab persistence continues normally when available.
+
+Stored tab hints are parsed when read. Unsupported game codes, invalid display names, and unknown themes are ignored before they reach app state or a connection query. Valid hints retain their normal behavior. This does not change saved games, device credentials, or server permission checks.

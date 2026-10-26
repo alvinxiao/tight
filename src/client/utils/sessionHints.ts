@@ -1,5 +1,16 @@
+import { isGameCode } from 'common/gameCode';
+import { isPlayerName } from 'common/playerName';
+
 type Hint = 'gameId' | 'playerId' | 'theme';
 type Backing = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+function parseHint(key: Hint, value: string | null): string | null {
+    switch (key) {
+        case 'gameId': return isGameCode(value) ? value : null;
+        case 'playerId': return isPlayerName(value) ? value : null;
+        case 'theme': return value === 'light' || value === 'dark' ? value : null;
+    }
+}
 
 /** Optional tab hints never establish permissions or own durable game data. */
 export function createSessionHints(storage: () => Backing) {
@@ -9,7 +20,7 @@ export function createSessionHints(storage: () => Backing) {
         getItem(key: Hint): string | null {
             if (available) {
                 try {
-                    const value = storage().getItem(key);
+                    const value = parseHint(key, storage().getItem(key));
                     if (value === null) memory.delete(key);
                     else memory.set(key, value);
                     return value;
