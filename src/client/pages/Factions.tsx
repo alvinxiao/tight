@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
@@ -31,6 +31,10 @@ function Factions() {
     const classes = useStyles();
 
     const [selectedName, setSelectedName] = useState('');
+    const navigationFocus = useRef<'previous' | 'next' | null>(null);
+    const previousButton = useRef<HTMLButtonElement>(null);
+    const nextButton = useRef<HTMLButtonElement>(null);
+    const retryButton = useRef<HTMLButtonElement>(null);
     const load = useCallback(async (signal: AbortSignal) => {
         const names = await api.factionListNames(undefined, { signal });
         const name = selectedName || names[0];
@@ -39,6 +43,15 @@ function Factions() {
         return { names, faction, name };
     }, [selectedName]);
     const { resource, retry } = useRemoteData(load);
+    useEffect(() => {
+        const direction = navigationFocus.current;
+        if (!direction || resource.kind === 'loading') return;
+        const target = resource.kind === 'error' ? retryButton.current
+            : direction === 'previous' ? previousButton.current : nextButton.current;
+        // Loading removes the toolbar. Recover only focus lost to a container.
+        if (target && document.activeElement !== target && document.activeElement?.contains(target)) target.focus();
+        if (resource.kind === 'loaded') navigationFocus.current = null;
+    }, [resource]);
     const pending = resource.kind === 'loading';
     const factionInfo = resource.kind === 'loaded' ? resource.data.faction : null;
     const factionNames = resource.kind === 'loaded' ? resource.data.names : [];
@@ -52,9 +65,12 @@ function Factions() {
         setExpanded(newExpanded);
     };
 
-    if (resource.kind === 'error') return <LoadFailure retry={retry} />;
+    if (resource.kind === 'error') return <LoadFailure retry={retry} buttonRef={retryButton} />;
     if (pending) return <CircularProgress aria-label="Loading factions" />;
-    const onFactionChange = setSelectedName;
+    const onFactionChange = (name: string, direction: 'previous' | 'next' | null = null) => {
+        navigationFocus.current = direction;
+        setSelectedName(name);
+    };
 
     const index = factionNames.indexOf(displayName);
     const lastIndex = factionNames.length - 1;
@@ -66,7 +82,9 @@ function Factions() {
             <AppBar className={classes.appBar} color="inherit" position="sticky">
                 <Toolbar classes={{ root: classes.toolbar }} disableGutters>
                     <Tooltip title={prevFaction}>
-                        <IconButton onClick={() => onFactionChange(prevFaction)} size="large">
+                        <IconButton ref={previousButton} onClick={event => onFactionChange(
+                            prevFaction, document.activeElement === event.currentTarget ? 'previous' : null,
+                        )} size="large">
                             <NavigateBeforeIcon />
                         </IconButton>
                     </Tooltip>
@@ -78,7 +96,9 @@ function Factions() {
                         hideNone
                     />
                     <Tooltip title={nextFaction}>
-                        <IconButton onClick={() => onFactionChange(nextFaction)} size="large">
+                        <IconButton ref={nextButton} onClick={event => onFactionChange(
+                            nextFaction, document.activeElement === event.currentTarget ? 'next' : null,
+                        )} size="large">
                             <NavigateNextIcon />
                         </IconButton>
                     </Tooltip>
