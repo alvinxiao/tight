@@ -1,4 +1,5 @@
 import React, { ElementType, ReactElement, useEffect, useState } from 'react';
+import { sessionHints } from './utils/sessionHints';
 import { useLocation, useNavigate, useParams } from 'react-router';
 
 import { Button, CircularProgress, Grid, Typography } from '@mui/material';
@@ -16,7 +17,7 @@ export interface GameWrapperProps {
 }
 
 /**
- * Wrapper to manage reading session store data and loading game and player
+ * Wrapper to manage reading optional tab hints and loading game and player
  * data before rendering the page.
  */
 export default function GameWrapper(props: GameWrapperProps): ReactElement {
@@ -42,7 +43,7 @@ export default function GameWrapper(props: GameWrapperProps): ReactElement {
 
     const { Page } = props;
 
-    const sessionGameId = sessionStorage.getItem('gameId');
+    const sessionGameId = sessionHints.getItem('gameId');
     const gameIdToLoad = gameIdParam;
     const pathnameLowerCase = pathname.toLowerCase();
     const isGamePage = gameIdToLoad ? pathnameLowerCase.includes(gameIdToLoad.toLowerCase()) : false;
@@ -87,13 +88,13 @@ export default function GameWrapper(props: GameWrapperProps): ReactElement {
                 if (controller.signal.aborted) return;
                 if (exists) {
                     const nextPlayerId =
-                        sessionGameId === gameIdToLoad ? sessionStorage.getItem('playerId') || null : null;
-                    sessionStorage.setItem('gameId', gameIdToLoad);
+                        sessionGameId === gameIdToLoad ? sessionHints.getItem('playerId') || null : null;
+                    sessionHints.setItem('gameId', gameIdToLoad);
                     if (playerId !== nextPlayerId) dispatch({ type: ActionType.setPlayerId, payload: nextPlayerId });
                     sendData({ type: MessageType.GAME_LOAD, data: { gameId: gameIdToLoad, playerId: nextPlayerId } });
                 } else {
-                    sessionStorage.removeItem('gameId');
-                    sessionStorage.removeItem('playerId');
+                    sessionHints.removeItem('gameId');
+                    sessionHints.removeItem('playerId');
                     navigate(`/${gameIdToLoad}/deleted`);
                 }
             })

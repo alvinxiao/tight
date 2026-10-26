@@ -1,4 +1,5 @@
 import { Dispatch, useCallback, useEffect, useRef } from 'react';
+import { sessionHints } from '../utils/sessionHints';
 import { z } from 'zod';
 import { MessageType } from 'common/message';
 import { commandResultSchema } from 'common/commandResult';
@@ -187,8 +188,8 @@ export default function useWebSocket(options: WebSocketOptions) {
         dispatch({ type: ActionType.setConnecting, payload: { connecting: true, connectError: false } });
         const endpoint = new URL(url);
         // Navigation records its target before a load request can fail; state may still hold the previous game.
-        const gameId = sessionStorage.getItem('gameId') || state.game?.id;
-        const playerId = state.playerId || sessionStorage.getItem('playerId');
+        const gameId = sessionHints.getItem('gameId') || state.game?.id;
+        const playerId = state.playerId || sessionHints.getItem('playerId');
         if (gameId) endpoint.searchParams.set('gameId', gameId);
         if (playerId) endpoint.searchParams.set('playerId', playerId);
         const ws = new WebSocket(endpoint.href);

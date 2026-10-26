@@ -1,4 +1,5 @@
 import { GameVersion } from 'common/gameVersion';
+import { sessionHints } from './utils/sessionHints';
 import { GameClientData, GamePlayer, StrategyCard } from 'common/Game';
 import { ChangeData } from 'common/message';
 import { AppTheme } from './types';
@@ -52,8 +53,8 @@ export const initialState: State = {
     reconnect: false,
     strategyCards: [],
     game: null,
-    playerId: sessionStorage.getItem('playerId') || null,
-    theme: (sessionStorage.getItem('theme') as AppTheme) || 'light',
+    playerId: sessionHints.getItem('playerId') || null,
+    theme: sessionHints.getItem('theme') === 'dark' ? 'dark' : 'light',
 };
 
 /**
@@ -132,10 +133,10 @@ export default function reducer(state: State, action: Action): State {
         case ActionType.setConnecting:
             return { ...state, ...payload };
         case ActionType.setTheme:
-            sessionStorage.setItem('theme', payload);
+            sessionHints.setItem('theme', payload);
             return { ...state, theme: payload };
         case ActionType.setPlayerId:
-            sessionStorage.setItem('playerId', payload ?? '');
+            sessionHints.setItem('playerId', payload ?? '');
             return { ...state, playerId: payload };
         case ActionType.setStrategyCards:
             return { ...state, strategyCards: payload };
@@ -148,7 +149,7 @@ export default function reducer(state: State, action: Action): State {
                 initialized: true,
                 snapshotSequence: state.snapshotSequence + 1,
             });
-            sessionStorage.setItem('playerId', next.playerId ?? '');
+            sessionHints.setItem('playerId', next.playerId ?? '');
             return next;
         }
         case ActionType.updateState:
