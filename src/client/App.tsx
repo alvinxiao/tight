@@ -4,6 +4,7 @@ import { CssBaseline } from '@mui/material';
 import { createTheme, ThemeProvider, Theme, StyledEngineProvider } from '@mui/material/styles';
 
 import Context from './Context';
+import { useSession } from './SessionGate';
 import AppContent from './AppContent';
 import reducer, { initialState } from './reducer';
 import useWebSocket from './hooks/useWebSocket';
@@ -29,7 +30,11 @@ const DARK_THEME = createTheme({
 });
 
 function App() {
-    const [state, dispatch] = useReducer(reducer, initialState);
+    const session = useSession();
+    const [state, dispatch] = useReducer(reducer, initialState, saved => ({
+        ...saved,
+        playerId: session.role === 'player' ? session.playerId : session.role === 'spectator' ? null : saved.playerId,
+    }));
 
     const { sendData } = useWebSocket({
         url: getWebSocketUrl(window.location.origin),
