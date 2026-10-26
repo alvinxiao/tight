@@ -33,3 +33,5 @@ The expanded faction reference labels its read-only Commodities field. Browser r
 Faction-reference bulk controls track the section indices, excluding TypeScript enum reverse-map names. Keyboard regressions expand every section individually and collapse them individually after Expand, then verify the opposite bulk action still works.
 
 Faction-reference Next and Previous navigation recover focus on the same directional control after loading. A failed read focuses Retry loading information, then returns to the directional control when retry succeeds. Recovery preserves focus deliberately moved elsewhere. Browser journeys hold real faction reads to check success, failure and retry, and deliberate focus changes in both directions.
+
+Faction-reference selection and Randomize also retain their control identity while the toolbar is replaced by loading feedback. Success restores the initiating control when focus was lost to the document. Failure focuses Retry, then a successful retry returns to the initiating control. Deliberate focus elsewhere is preserved. Browser journeys exercise both controls with held real reads, successful and failed responses, and retry.
