@@ -111,7 +111,7 @@ The backend serves watched browser assets and API from one origin. Reload after 
 
 CI covers Linux and Windows server/build checks, Linux browser journeys, Electron integration on both platforms, and the packaged Windows executable. Windows checks also exercise installer refusal during live hosting, in-place installation, uninstall/reinstall, and preserved saves and grants.
 
-These automated checks do not establish physical phone or clean-machine release qualification.
+These automated checks do not establish physical phone or clean-machine release qualification. Use the [Windows and phone qualification procedure](docs/windows-phone-qualification.md) and its blank evidence record for those tests.
 
 ## Remaining release limitations
 

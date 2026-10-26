@@ -44,3 +44,5 @@ Installer builds require PowerShell 7 (`pwsh.exe`). The CI annotation wrapper us
 5. Open TIGHT and confirm the saved-game list before enabling Wi-Fi sharing again.
 
 TIGHT has no automatic download or background install path. An incomplete download therefore cannot replace the working app. Database startup validates saves and creates a pre-migration backup; failed migration preserves the original database. A failed app installation may need the intended installer run again. Do not assume an older app can read a newer database. Restore a compatible pre-migration backup in a separate data folder when downgrading; automatic application rollback is not provided.
+
+Use the [Windows and phone qualification procedure](windows-phone-qualification.md) to record exact installer identity, native prompts, physical-device results, and update or recovery failures. Its blank record does not establish a release pass.
